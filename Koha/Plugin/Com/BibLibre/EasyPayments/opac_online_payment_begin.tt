@@ -1,18 +1,19 @@
-[% USE Koha %]
-[% USE KohaDates %]
-
+[% USE raw %]
 [% INCLUDE 'doc-head-open.inc' %]
+<title>[% IF ( LibraryNameTitle ) %][% LibraryNameTitle | html %][% ELSE %]Koha online[% END %] catalog &rsaquo; Your charges</title>
 [% INCLUDE 'doc-head-close.inc' %]
-[% BLOCK cssinclude %][% END %]
+[% BLOCK cssinclude %]
+[% END %]
 </head>
-<body id="opac-account" class="scrollto">
+
+[% INCLUDE 'bodytag.inc' bodyid='opac-account' bodyclass='scrollto' %]
 [% INCLUDE 'masthead.inc' %]
 
 <div class="main">
     <ul class="breadcrumb">
         <li><a href="/cgi-bin/koha/opac-main.pl">Home</a> <span class="divider">&rsaquo;</span></li>
-        <li><a href="/cgi-bin/koha/opac-user.pl">[% borrower.firstname %] [% borrower.surname %]</a><span class="divider">&rsaquo;</span></li>
-        <li><a href="#">Pay your fines and charges</a></li>
+        <li>[% IF logged_in_user %]<a href="/cgi-bin/koha/opac-user.pl">[% INCLUDE 'patron-title.inc' patron = logged_in_user %]</a>[% END %] <span class="divider">&rsaquo;</span></li>
+        <li><a href="#">Your charges</a></li>
     </ul>
 
     <div class="container-fluid">
@@ -22,38 +23,15 @@
                     [% INCLUDE 'navigation.inc' IsPatronPage=1 %]
                 </div>
             </div>
-
             <div class="span10">
                 <div id="useraccount" class="maincontent">
-                    <p>
-                        Momentarily you will be redirected to the DIBS payment portal.
-                    </p>
-                
-                    <form id="dibsform" method="post" action="[% DIBSURL %]">
-                        [% IF test %]
-                        <input id="test" name="test" type="hidden" value="1"/>
-                        [% END %]
-                        <input id="accepturl" name="accepturl" type="hidden" value="[% accepturl %]"/>
-                        <input id="amount" name="amount" type="hidden" value="[% amount %]"/>
-                        <input id="callbackurl" name="callbackurl" type="hidden" value="[% callbackurl %]"/>
-                        <input id="currency" name="currency" type="hidden" value="[% currency %]"/>
-                        <input id="merchant" name="merchant" type="hidden" value="[% merchant %]"/>
-                        <input id="orderid" name="orderid" type="hidden" value="[% orderid %]"/>
-                        <input id="lang" name="lang" type="hidden" value="[% lang %]"/>
-                        <input id="md5key" name="md5key" type="hidden" value='[% md5key %]'/>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-[% BLOCK jsinclude %][% END %]
+                    [% easy_message | $raw %]
+                </div> <!-- / #useraccount -->
+            </div> <!-- / .span10 -->
+        </div> <!-- / .row-fluid -->
+    </div> <!-- / .container-fluid -->
+</div> <!-- / .main -->
 
 [% INCLUDE 'opac-bottom.inc' %]
-<script>
-$(document).ready(function() {
-  $('#dibsform').submit();
-});
-</script>
-
+[% BLOCK jsinclude %]
+[% END %]

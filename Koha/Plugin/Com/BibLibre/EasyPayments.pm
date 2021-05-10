@@ -1,4 +1,4 @@
-package Koha::Plugin::Com::BibLibre::DIBSPayments;
+package Koha::Plugin::Com::BibLibre::EasyPayments;
 
 use Modern::Perl;
 
@@ -6,28 +6,29 @@ use base qw(Koha::Plugins::Base);
 
 use C4::Context;
 use C4::Auth;
-use Koha::Account;
 use Koha::Account::Lines;
+use Koha::Acquisition::Currencies;
 use Koha::Patrons;
+use Koha::Plugin::Com::BibLibre::EasyPayments::Transactions;
 
-use Locale::Currency::Format;
-use Digest::MD5 qw(md5_hex);
-use HTML::Entities;
+use LWP::UserAgent ();
+use JSON           ();
+use UUID;
 
 ## Here we set our plugin version
-our $VERSION = "00.00.02";
+our $VERSION = '00.00.03';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
-    name            => 'DIBS Payments Plugin',
+    name            => 'Easy Payments Plugin',
     author          => 'Matthias Meusburger',
     date_authored   => '2019-07-01',
-    date_updated    => "2020-07-27",
-    minimum_version => '17.11.00.000',
-    maximum_version => '',
+    date_updated    => '2021-03-26',
+    minimum_version => '19.05.00.000',
+    maximum_version => undef,
     version         => $VERSION,
     description     => 'This plugin implements online payments using '
-      . 'DIBS payments platform. https://tech.dibspayment.com/D2',
+      . 'Easy payments platform. https://tech.dibspayment.com/easy',
 };
 
 sub new {
@@ -42,33 +43,40 @@ sub new {
     ## and returns our actual $self
     my $self = $class->SUPER::new($args);
 
+    Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema->table(
+        $self->get_qualified_table_name('transactions') );
+
     return $self;
-}
-
-sub _version_check {
-    my ( $self, $minversion ) = @_;
-
-    $minversion =~ s/(.*\..*)\.(.*)\.(.*)/$1$2$3/;
-
-    my $kohaversion = Koha::version();
-
-    # remove the 3 last . to have a Perl number
-    $kohaversion =~ s/(.*\..*)\.(.*)\.(.*)/$1$2$3/;
-
-    return ( $kohaversion > $minversion );
 }
 
 sub opac_online_payment {
     my ( $self, $args ) = @_;
 
-    return $self->retrieve_data('enable_opac_payments') eq 'Yes';
+    if ( !$self->retrieve_data('enable_opac_payments') ) {
+        return;
+    }
+
+    my $callback_url =
+      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
+        C4::Context->preference('OPACBaseURL') );
+    my $ua       = LWP::UserAgent->new;
+    my $response = $ua->post(
+        $callback_url->as_string,
+        'Content-Type' => 'application/json',
+        Content        => '{"event": "test.api"}'
+    );
+    if ( $response->code != 200 ) {
+        warn 'Easy Payment API not enabled. Please restart web server.';
+        return;
+    }
+
+    return 1;
 }
 
 ## Initiate the payment process
 sub opac_online_payment_begin {
     my ( $self, $args ) = @_;
-    my $cgi    = $self->{'cgi'};
-    my $schema = Koha::Database->new()->schema();
+    my $cgi = $self->{'cgi'};
 
     my ( $template, $borrowernumber ) = get_template_and_user(
         {
@@ -85,90 +93,112 @@ sub opac_online_payment_begin {
 
     # Add the accountlines to pay off
     my @accountline_ids = $cgi->multi_param('accountline');
-    my $accountlines    = $schema->resultset('Accountline')
-      ->search( { accountlines_id => \@accountline_ids } );
-    my $now               = DateTime->now;
-    my $dateoftransaction = $now->ymd('-') . ' ' . $now->hms(':');
+    my $accountlines =
+      Koha::Account::Lines->search( { accountlines_id => \@accountline_ids } );
 
-    my $active_currency = Koha::Acquisition::Currencies->get_active;
-    my $local_currency;
-    if ($active_currency) {
-        $local_currency = $active_currency->isocode;
-        $local_currency = $active_currency->currency unless defined $local_currency;
-    } else {
-        $local_currency = 'EUR';
-    }
-    my $decimals = decimal_precision($local_currency);
-
-    my $sum = 0;
-    for my $accountline ( $accountlines->all ) {
-        # Track sum
-        my $amount = sprintf "%." . $decimals . "f", $accountline->amountoutstanding;
-        $sum = $sum + $amount;
-    }
+    my $sum = sprintf '%.2f', $accountlines->total_outstanding;
 
     # Create a transaction
-    my $dbh   = C4::Context->dbh;
-    my $table = $self->get_qualified_table_name('dibs_transactions');
-    my $sth = $dbh->prepare("INSERT INTO $table (`transaction_id`, `borrowernumber`, `accountlines_ids`, `amount`) VALUES (?,?,?,?)");
-    $sth->execute("NULL", $borrowernumber, join(" ", $cgi->multi_param('accountline')), $sum);
+    my $authorization = UUID::uuid() =~ y/-//dr;
+    my $transaction =
+      Koha::Plugin::Com::BibLibre::EasyPayments::Transaction->new(
+        {
+            borrowernumber   => $borrowernumber,
+            accountlines_ids => join( ' ', $cgi->multi_param('accountline') ),
+            amount           => $sum,
+            authorization    => $authorization
+        }
+      )->store;
+    my $transaction_id = $transaction->transaction_id;
 
-    my $transaction_id =
-      $dbh->last_insert_id( undef, undef, qw(dibs_transactions transaction_id) );
-
-    # DIBS require "The smallest unit of an amount in the selected currency, following the ISO4217 standard." 
-    if ($decimals > 0) {
-        $sum = $sum * 10**$decimals;
-    }
+    # Decimal separators are not allowed in Easy.
+    #The last two digits of a number are considered to be the decimals.
+    $sum = int( $sum * 100 );
 
     # Construct redirect URI
-    my $accepturl = URI->new( C4::Context->preference('OPACBaseURL')
-          . "/cgi-bin/koha/opac-account-pay-return.pl?payment_method=Koha::Plugin::Com::BibLibre::DIBSPayments" );
+    my $accepturl = URI->new_abs(
+        'cgi-bin/koha/opac-account-pay-return.pl?payment_method='
+          . $self->{class},
+        C4::Context->preference('OPACBaseURL')
+    );
 
     # Construct callback URI
     my $callback_url =
-      URI->new( C4::Context->preference('OPACBaseURL')
-          . $self->get_plugin_http_path()
-          . "/callback.pl" );
+      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
+        C4::Context->preference('OPACBaseURL') );
 
-    # Construct cancel URI
-    my $cancel_url = URI->new( C4::Context->preference('OPACBaseURL')
-          . "/cgi-bin/koha/opac-account.pl?payment_method=Koha::Plugin::Com::BibLibre::DIBSPayments" );
+    my $terms_url =
+      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
+        C4::Context->preference('OPACBaseURL') );
 
-
-    # MD5
-    my $md51 = md5_hex($self->retrieve_data('MD5k1') . 'merchant=' . $self->retrieve_data('DIBSMerchantID') . "&orderid=$transaction_id&currency=$local_currency&amount=$sum");
-    my $md5checksum = md5_hex($self->retrieve_data('MD5k2') . $md51);
-
-    # Test mode?
-    my $test = $self->retrieve_data('testMode');
-
-	$template->param(
-
-        DIBSURL => 'https://payment.architrade.com/paymentweb/start.action',
-
-        # Required fields
-        accepturl    => $accepturl,
-        amount       => $sum,
-        callbackurl  => $callback_url,
-        currency     => $local_currency,
-        merchant     => $self->retrieve_data('DIBSMerchantID'),
-        orderid      => $transaction_id,
-        
-        # Optional fields
-        lang               => C4::Languages::getlanguage(),
-        billingFirstName   => $borrower_result->firstname,
-        billingLastName    => $borrower_result->surname,
-        billingAddress     => $borrower_result->streetnumber . " " . $borrower_result->address,
-        billingAddress2    => $borrower_result->address2,
-        billingPostalCode  => $borrower_result->zipcode,
-        billingPostalPlace => $borrower_result->city,
-        email              => $borrower_result->email,
-        md5key             => $md5checksum,
-        test               => $test
+    my $ua         = LWP::UserAgent->new;
+    my $datastring = JSON::encode_json(
+        {
+            order => {
+                items => [
+                    {
+                        name             => 'Fee',
+                        quantity         => 1,
+                        unit             => 'x',
+                        unitPrice        => $sum,
+                        grossTotalAmount => $sum,
+                        netTotalAmount   => $sum,
+                        reference        => 'fee'
+                    }
+                ],
+                amount    => $sum,
+                currency  => $self->retrieve_data('currency'),
+                reference => $transaction_id
+            },
+            checkout => {
+                integrationType => 'hostedPaymentPage',
+                returnUrl       => $accepturl->as_string,
+                termsUrl        => $terms_url->as_string
+            },
+            notifications => {
+                webhooks => [
+                    {
+                        eventName     => 'payment.checkout.completed',
+                        url           => $callback_url->as_string,
+                        authorization => $authorization
+                    }
+                ]
+            }
+        }
     );
-
-    $self->output_html( $template->output() );
+    my ( $easy_server, $secret_key, $correct_key );
+    if ( $self->retrieve_data('testMode') ) {
+        $easy_server = 'test.api.dibspayment.eu';
+        $correct_key = ( $secret_key = $self->retrieve_data('test_key') ) =~
+          s/test-secret-key-//;
+    }
+    else {
+        $easy_server = 'api.dibspayment.eu';
+        $correct_key = ( $secret_key = $self->retrieve_data('live_key') ) =~
+          s/live-secret-key-//;
+    }
+    if ( !$correct_key ) {
+        warn 'Secret key has the wrong prefix';
+        $template->param( easy_message => 'Error creating payment' );
+        $self->output_html( $template->output() );
+    }
+    my $easy_url =
+      URI->new_abs( 'v1/payments', "https://$easy_server" )->as_string;
+    my $response = $ua->post(
+        $easy_url,
+        Authorization  => $secret_key,
+        'Content-Type' => 'application/json',
+        Content        => $datastring
+    );
+    if ( $response->code != 201 ) {
+        warn $response->code . ': ' . $response->content;
+        $template->param( easy_message => 'Error creating payment' );
+        return $self->output_html( $template->output() );
+    }
+    my $json = JSON::decode_json( $response->decoded_content );
+    $transaction->payment_id( $json->{paymentId} )->store;
+    print $cgi->redirect( $json->{hostedPaymentPageUrl} );
+    exit;
 }
 
 ## Complete the payment process
@@ -186,60 +216,35 @@ sub opac_online_payment_end {
         }
     );
 
-    my $transaction_id = $cgi->param('orderid');
-
     # Check payment went through here
-    my $table = $self->get_qualified_table_name('dibs_transactions');
-    my $dbh   = C4::Context->dbh;
-    my $sth   = $dbh->prepare(
-        "SELECT accountline_id FROM $table WHERE transaction_id = ?");
-    $sth->execute($transaction_id);
-    my ($accountline_id) = $sth->fetchrow_array();
-
-    my $line =
-      Koha::Account::Lines->find( { accountlines_id => $accountline_id } );
-    my $transaction_value = $line->amount;
-    my $transaction_amount = sprintf "%.2f", $transaction_value;
-    $transaction_amount =~ s/^-//g;
-
-    my $active_currency = Koha::Acquisition::Currencies->get_active;
-    my $local_currency;
-    if ($active_currency) {
-        $local_currency = $active_currency->isocode;
-        $local_currency = $active_currency->currency unless defined $local_currency;
-    } else {
-        $local_currency = 'EUR';
-    }
-
-    if ( defined($transaction_value) ) {
-        $template->param(
-            borrower      => scalar Koha::Patrons->find($borrowernumber),
-            message       => 'valid_payment',
-            currency      => $local_currency,
-            message_value => $transaction_amount
-        );
-    }
-    else {
+    my $transaction =
+      Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
+        {
+            payment_id => scalar $cgi->param('paymentid')
+        }
+      );
+    if ( !defined $transaction->accountline_id ) {
+        warn 'No payment found. Check API callback.';
         $template->param(
             borrower => scalar Koha::Patrons->find($borrowernumber),
-            message  => 'no_amount'
+            message  => 'no_payment'
         );
+        return $self->output_html( $template->output() );
     }
 
+    my $line =
+      Koha::Account::Lines->find(
+        { accountlines_id => $transaction->accountline_id } );
+
+    $template->param(
+        borrower      => scalar Koha::Patrons->find($borrowernumber),
+        message       => 'valid_payment',
+        currency      => $self->retrieve_data('currency'),
+        message_value => sprintf '%.2f',
+        abs( $line->amount )
+    );
+
     $self->output_html( $template->output() );
-}
-
-## If your plugin needs to add some javascript in the OPAC, you'll want
-## to return that javascript here. Don't forget to wrap your javascript in
-## <script> tags. By not adding them automatically for you, you'll have a
-## chance to include other javascript files if necessary.
-sub opac_js {
-    my ($self) = @_;
-
-    # We could add in a preference driven 'enforced pay all' option here.
-    return q|
-        <script></script>
-    |;
 }
 
 ## If your tool is complicated enough to needs it's own setting/configuration
@@ -250,42 +255,51 @@ sub configure {
     my ( $self, $args ) = @_;
     my $cgi = $self->{'cgi'};
 
-    unless ( $cgi->param('save') ) {
-        my $template = $self->get_template( { file => 'configure.tt' } );
-
-        ## Grab the values we already have for our settings, if any exist
-        $template->param(
-            enable_opac_payments => $self->retrieve_data('enable_opac_payments'),
-            DIBSMerchantID       => $self->retrieve_data('DIBSMerchantID'),
-            MD5k1                => $self->retrieve_data('MD5k1'),
-            MD5k2                => $self->retrieve_data('MD5k2'),
-            testMode             => $self->retrieve_data('testMode')
-        );
-
-        $self->output_html( $template->output() );
-    }
-    else {
+    if ( scalar $cgi->param('save') ) {
         $self->store_data(
             {
-                enable_opac_payments => $cgi->param('enable_opac_payments'),
-                DIBSMerchantID       => $cgi->param('DIBSMerchantID'),
-                MD5k1                => $cgi->param('MD5k1'),
-                MD5k2                => $cgi->param('MD5k2'),
-                testMode             => $cgi->param('testMode')
+                enable_opac_payments =>
+                  scalar $cgi->param('enable_opac_payments'),
+                currency => scalar $cgi->param('currency'),
+                live_key => scalar $cgi->param('live_key'),
+                test_key => scalar $cgi->param('test_key'),
+                testMode => scalar $cgi->param('testMode'),
+                terms    => scalar $cgi->param('terms')
             }
         );
         $self->go_home();
     }
+    else {
+        my $template = $self->get_template( { file => 'configure.tt' } );
+        my $callback_url = URI->new_abs(
+            'api/v1/contrib/' . $self->api_namespace . '/callback',
+            C4::Context->preference('staffClientBaseURL')
+        );
+
+        ## Grab the values we already have for our settings, if any exist
+        $template->param(
+            api_url => $callback_url,
+            enable_opac_payments =>
+              $self->retrieve_data('enable_opac_payments'),
+            currency => $self->retrieve_data('currency'),
+            live_key => $self->retrieve_data('live_key'),
+            test_key => $self->retrieve_data('test_key'),
+            testMode => $self->retrieve_data('testMode'),
+            terms    => $self->retrieve_data('terms')
+        );
+
+        $self->output_html( $template->output() );
+    }
 }
 
 ## This is the 'install' method. Any database tables or other setup that should
-## be done when the plugin if first installed should be executed in this method.
-## The installation method should always return true if the installation succeeded
-## or false if it failed.
+## be done when the plugin if first installed should be executed in this
+## method. The installation method should always return true if the
+## installation succeeded or false if it failed.
 sub install() {
     my ( $self, $args ) = @_;
 
-    my $table = $self->get_qualified_table_name('dibs_transactions');
+    my $table = $self->get_qualified_table_name('transactions');
 
     return C4::Context->dbh->do( "
         CREATE TABLE IF NOT EXISTS $table (
@@ -294,34 +308,28 @@ sub install() {
             `borrowernumber` INT( 11 ),
             `accountlines_ids` mediumtext,
             `amount` decimal(28,6),
+            `authorization` CHAR( 32 ),
+            `payment_id` CHAR( 32 ),
             `updated` TIMESTAMP,
             PRIMARY KEY (`transaction_id`)
         ) ENGINE = INNODB;
     " );
 }
 
-## This is the 'upgrade' method. It will be triggered when a newer version of a
-## plugin is installed over an existing older version of a plugin
-#sub upgrade {
-#    my ( $self, $args ) = @_;
-#
-#    my $dt = dt_from_string();
-#    $self->store_data(
-#        { last_upgraded => $dt->ymd('-') . ' ' . $dt->hms(':') } );
-#
-#    return 1;
-#}
+sub api_routes {
+    my ( $self, $args ) = @_;
 
-## This method will be run just before the plugin files are deleted
-## when a plugin is uninstalled. It is good practice to clean up
-## after ourselves!
-#sub uninstall() {
-#    my ( $self, $args ) = @_;
-#
-#    my $table = $self->get_qualified_table_name('mytable');
-#
-#    return C4::Context->dbh->do("DROP TABLE $table");
-#}
+    my $spec_str = $self->mbf_read('openapi.json');
+    my $spec     = JSON::decode_json($spec_str);
+
+    return $spec;
+}
+
+sub api_namespace {
+    my ($self) = @_;
+
+    return 'easy';
+}
 
 1;
 

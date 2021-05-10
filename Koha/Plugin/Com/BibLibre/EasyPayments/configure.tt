@@ -1,67 +1,156 @@
+[% USE raw %]
+[% USE Asset %]
+[% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
- <title>Koha: DIBS Online Payments: Configuration</title>
+ <title>Koha: Easy Online Payments: Configuration</title>
 [% INCLUDE 'doc-head-close.inc' %]
 </head>
 <body>
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
 
-<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; DIBS Online Payments &rsaquo; Configuration</div>
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a> &rsaquo; Easy Online Payments &rsaquo; Configuration</div>
 
-<div id="doc3">
+<div class="main container-fluid">
+<div class="row">
+<div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
     <!-- We can access our own plugins resource files using the PLUGIN_PATH variable. -->
-    <img src="https://tech.dibspayment.com/sites/tech/files/pictures/LOGO/DIBS/PNG/DIBS%20logo_142x72.png" />
-    <h3>Koha: DIBS Online Payments: Configuration</h3>
+    <img src="https://tech.dibspayment.com/sites/tech/files/pictures/easy/DIBS_Easy_Log_pos_Black.jpg" />
 
     <!-- Notice our form here has no 'action', this is good, it means that our forms will always get passed back to 'plugins/run.pl'. You could hard code it instead if you prefer -->
-    <form method="get">
+    <form id= "mainform" method="get">
         <!-- Always pass these two parameters so the plugin system knows what to execute! -->
         <input type="hidden" name="class" value="[% CLASS %]"/>
         <input type="hidden" name="method" value="[% METHOD %]"/>
 
+        <fieldset class="rows">
+        <legend>Easy Configuration</legend>
+        <ol>
+        <li>
         <label for="enable_opac_payments">Enable OPAC Account Payments: </label>
-        <select name="enable_opac_payments">
-            [% IF enable_opac_payments == 'No' %]
-                <option value="No" selected="selected">No</option>
-            [% ELSE %]
-                <option value="No">No</option>
-            [% END %]
-
-            [% IF enable_opac_payments == 'Yes' %]
-                <option value="Yes" selected="selected">Yes</option>
-            [% ELSE %]
-                <option value="Yes">Yes</option>
-            [% END %]
+        <select id="enable_opac_payments" name="enable_opac_payments">
+            <option value="0">No</option>
+            <option value="1"[% IF enable_opac_payments %] selected="selected"[% END %]>Yes</option>
         </select>
-
-        <p>
-
-        <label for="DIBSMerchantID">DIBS Merchant ID: </label>
-        <input type="text" name="DIBSMerchantID" value="[% DIBSMerchantID %]" />
-
-        <p>
-
-        <label for="MD5k1">MD5 k1: </label>
-        <input type="text" name="MD5k1" value="[% MD5k1 %]" />
-
-        <p>
-
-        <label for="MD5k2">MD5 k2: </label>
-        <input type="text" name="MD5k2" value="[% MD5k2 %]" />
-
-        <p>
-
+        </li>
+        <li>
+        <label for="currency">Currency (3&nbsp;letters): </label>
+        <input type="text" name="currency" value="[% currency %]" size="3" />
+        </li>
+        <li>
+        <label for="live_key">Live secret key (with prefix): </label>
+        <input type="text" name="live_key" value="[% live_key %]" size="32" />
+        </li>
+        <li>
+        <label for="test_key">Test secret key (with prefix): </label>
+        <input type="text" name="test_key" value="[% test_key %]" size="32" />
+        </li>
+        <li>
         <label for="testMode">Test mode: </label>
-        <select name="testMode">
+        <select id="testMode" name="testMode">
             <option value="0">Disabled</option>
-            <option value="1" [% IF testMode %] selected="selected" [% END %]>Enabled</option>
+            <option value="1"[% IF testMode %] selected="selected"[% END %]>Enabled</option>
         </select>
-
-        <p>
-
+        </li>
+        <li>
+        <label for="terms">Terms and conditions: </label>
+        <textarea name="terms" id="terms" cols="75" rows="10">[% terms | $raw %]</textarea>
+        </li>
+        </ol>
+        </fieldset>
+        <fieldset class="action">
         <input type="hidden" name="save" value="1" />
-
         <input type="submit" value="Save configuration" />
+        </fieldset>
     </form>
+</div>
+</div>
+</div>
+[% MACRO jsinclude BLOCK %]
+    [% Asset.js("lib/tiny_mce/tinymce.min.js") | $raw %]
+    [% INCLUDE 'str/tinymce_i18n.inc' %]
+    <script>
+        $(document).ready(function() {
+            jQuery.validator.addMethod("key", function(value, element, params) {
+                return this.optional(element) || new RegExp("^" + params + "[0-9a-f]{32}$").test(value);
+            }, jQuery.validator.format("Please enter the full key with the {0} prefix"));
+            $("#mainform").validate({
+                rules: {
+                    enable_opac_payments: {
+                        remote: {
+                            beforeSend: function(jqXHR, settings) {
+                                settings.data = '{"event": "api.test"}';
+                            },
+                            dataFilter: function(data, type) {
+                                return true;
+                            },
+                            error: function(jqXHR, textStatus, errorThrown){
+                                validator = $(this).validate();
+                                element = $('#enable_opac_payments')[0];
+                                method = "remote";
+                                previous = validator.previousValue(element, method);
+                                validator.settings.messages[ element.name ][ method ] = previous.originalMessage;
+                                valid = $(element).val() == 0;
+                                if (valid) {
+                                    submitted = validator.formSubmitted;
+                                    validator.resetInternals();
+                                    validator.toHide = validator.errorsFor( element );
+                                    validator.formSubmitted = submitted;
+                                    validator.successList.push( element );
+                                    validator.invalid[ element.name ] = false;
+                                    validator.showErrors();
+                                }
+                                else {
+                                    validator.invalid[ element.name ] = true;
+                                    errors = {};
+                                    errors[ element.name ] = previous.message = "Cannot be enabled without the plugin's API. Please restart webserver.";
+                                    validator.showErrors( errors );
+                                }
+                                previous.valid = valid;
+                                validator.stopRequest(element, valid);
+                            },
+                            type: "post",
+                            url: "[% api_url %]"
+                        }
+                    },
+                    currency: {
+                        rangelength: [3, 3],
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1;
+                        }
+                    },
+                    live_key: {
+                        key: "live-secret-key-",
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#testMode').val() == 0;
+                        }
+                    },
+                    test_key: {
+                        key: "test-secret-key-",
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#testMode').val() == 1;
+                        }
+                    }
+                }
+            });
+        });
+        tinyMCE.init({
+            verify_html: false,
+            force_br_newlines : false,
+            force_p_newlines : false,
+            forced_root_block : '',
+            branding : false,
+            relative_urls : false,
+            content_css : "[% interface | html %]/[% theme | html %]/css/tinymce.css",
+            menubar : "file edit view insert format tools table",
+            mode : "specific_textareas",
+            plugins : "autoresize table hr link image charmap lists code emoticons",
+            toolbar : [
+                "formatselect | bold italic | cut copy paste | alignleft aligncenter alignright | outdent indent | image link unlink anchor cleanup hr",
+                "table | bullist numlist | undo redo | removeformat | emoticons charmap | forecolor backcolor | code visualaid help"
+            ],
+        });
+    </script>
+[% END %]
 
 [% INCLUDE 'intranet-bottom.inc' %]

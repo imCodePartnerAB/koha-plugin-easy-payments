@@ -1,0 +1,57 @@
+{
+  "/callback": {
+    "post": {
+      "x-mojo-to": "Com::BibLibre::EasyPayments::Controller#callback",
+      "operationId": "callback",
+      "tags": ["patron"],
+      "parameters": [{
+          "name": "body",
+          "in": "body",
+          "description": "A JSON object",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "description": "Identifier",
+                "type": "string"
+              },
+              "merchantId": {
+                "description": "Merchant identifier",
+                "type": "string"
+              },
+              "timestamp": {
+                "description": "Timestamp",
+                "type": "string"
+              },
+              "event": {
+                "description": "Event",
+                "type": "string"
+              },
+              "data": {
+                "description": "Data",
+                "type": "object"
+              }
+            }
+          }
+      }],
+      "responses": {
+        "200": {
+          "description": "OK"
+        }
+      }
+    }
+  },
+  "/terms": {
+    "get": {
+      "x-mojo-to": "Com::BibLibre::EasyPayments::Controller#terms",
+      "operationId": "terms",
+      "tags": ["patron"],
+      "responses": {
+        "200": {
+          "description": "OK"
+        }
+      }
+    }
+  }
+}
