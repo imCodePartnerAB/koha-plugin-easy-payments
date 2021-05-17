@@ -147,14 +147,12 @@ sub callback {
             next;
         }
 
-        if (
-            !Koha::Checkouts->find(
-                {
-                    itemnumber     => $line->itemnumber,
-                    borrowernumber => $line->borrowernumber
-                }
-            )
-          )
+        my $checkout = Koha::Checkouts->find(
+            {
+                itemnumber => $line->itemnumber
+            }
+        );
+        if ( !$checkout || $checkout->borrowernumber != $line->borrowernumber )
         {
             next;
         }

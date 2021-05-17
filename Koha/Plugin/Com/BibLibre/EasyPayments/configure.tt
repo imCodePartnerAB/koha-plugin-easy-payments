@@ -53,7 +53,7 @@
         </select>
         </li>
         <li>
-        <label for="terms">Terms and conditions: </label>
+        <label for="terms">Terms and conditions<br />(HTML allowed): </label>
         <textarea name="terms" id="terms" cols="75" rows="10">[% terms | $raw %]</textarea>
         </li>
         </ol>
@@ -67,8 +67,6 @@
 </div>
 </div>
 [% MACRO jsinclude BLOCK %]
-    [% Asset.js("lib/tiny_mce/tinymce.min.js") | $raw %]
-    [% INCLUDE 'str/tinymce_i18n.inc' %]
     <script>
         $(document).ready(function() {
             jQuery.validator.addMethod("key", function(value, element, params) {
@@ -78,6 +76,9 @@
                 rules: {
                     enable_opac_payments: {
                         remote: {
+                            beforeSend: function(jqXHR, settings) {
+                                settings.url = "[% apis_url %]";
+                            },
                             dataFilter: function(data, type) {
                                 if ($('#enable_opac_payments').val() == 1 && data.indexOf("POST [% callback %]") == -1) {
                                     return false;
@@ -110,22 +111,6 @@
                     enable_opac_payments: "[% message %]"
                 }
             });
-        });
-        tinyMCE.init({
-            verify_html: false,
-            force_br_newlines : false,
-            force_p_newlines : false,
-            forced_root_block : '',
-            branding : false,
-            relative_urls : false,
-            content_css : "[% interface | html %]/[% theme | html %]/css/tinymce.css",
-            menubar : "file edit view insert format tools table",
-            mode : "specific_textareas",
-            plugins : "autoresize table hr link image charmap lists code emoticons",
-            toolbar : [
-                "formatselect | bold italic | cut copy paste | alignleft aligncenter alignright | outdent indent | image link unlink anchor cleanup hr",
-                "table | bullist numlist | undo redo | removeformat | emoticons charmap | forecolor backcolor | code visualaid help"
-            ],
         });
     </script>
 [% END %]

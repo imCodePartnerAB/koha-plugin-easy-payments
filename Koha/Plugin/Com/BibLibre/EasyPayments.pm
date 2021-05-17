@@ -276,9 +276,9 @@ sub configure {
             C4::Context->preference('staffClientBaseURL') . '/'
         );
         my $callback = '/api/v1/contrib/' . $self->api_namespace . '/callback';
-        my $message = 'Please restart the web server.';
-        if (!$self->is_enabled) {
-            $message = 'Please enable the plugin and restart the web server.';
+        my $message = 'Please enable the plugin and restart the web server.';
+        if ( $self->retrieve_data( '__ENABLED__' ) ) {
+            $message = 'Please restart the web server.';
         }
 
         ## Grab the values we already have for our settings, if any exist
