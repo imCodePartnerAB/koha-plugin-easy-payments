@@ -78,39 +78,13 @@
                 rules: {
                     enable_opac_payments: {
                         remote: {
-                            beforeSend: function(jqXHR, settings) {
-                                settings.data = '{"event": "api.test"}';
-                            },
                             dataFilter: function(data, type) {
+                                if ($('#enable_opac_payments').val() == 1 && data.indexOf("POST [% callback %]") == -1) {
+                                    return false;
+                                }
                                 return true;
                             },
-                            error: function(jqXHR, textStatus, errorThrown){
-                                validator = $(this).validate();
-                                element = $('#enable_opac_payments')[0];
-                                method = "remote";
-                                previous = validator.previousValue(element, method);
-                                validator.settings.messages[ element.name ][ method ] = previous.originalMessage;
-                                valid = $(element).val() == 0;
-                                if (valid) {
-                                    submitted = validator.formSubmitted;
-                                    validator.resetInternals();
-                                    validator.toHide = validator.errorsFor( element );
-                                    validator.formSubmitted = submitted;
-                                    validator.successList.push( element );
-                                    validator.invalid[ element.name ] = false;
-                                    validator.showErrors();
-                                }
-                                else {
-                                    validator.invalid[ element.name ] = true;
-                                    errors = {};
-                                    errors[ element.name ] = previous.message = "Cannot be enabled without the plugin's API. Please restart webserver.";
-                                    validator.showErrors( errors );
-                                }
-                                previous.valid = valid;
-                                validator.stopRequest(element, valid);
-                            },
-                            type: "post",
-                            url: "[% api_url %]"
+                            url: "[% apis_url %]"
                         }
                     },
                     currency: {
@@ -131,6 +105,9 @@
                             return $('#enable_opac_payments').val() == 1 && $('#testMode').val() == 1;
                         }
                     }
+                },
+                messages: {
+                    enable_opac_payments: "[% message %]"
                 }
             });
         });

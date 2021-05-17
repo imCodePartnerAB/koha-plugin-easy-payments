@@ -11,7 +11,7 @@ To set up the Koha plugin system you must first make some changes to your instal
 
 # Easy configuration
 * Create an Easy test account (https://portal.dibspayment.eu/registration)
-* Login to the admin interface (https://portal.dibspayment.eu/)
+* Log in to the admin interface (https://portal.dibspayment.eu/)
 * Select `Company` from the menu on the left
 * Select `Integration` under `Company`
 * Copy the secret keys (not the checkout keys) for the Live and Test environment
@@ -22,4 +22,8 @@ To set up the Koha plugin system you must first make some changes to your instal
 
 # API routes
 The plugin requires that its API routes are added to Koha.
+* Enable the plugin
 * Restart the webserver after installing the plugin
+
+# Testing
+Testing information can be found at (https://tech.dibspayment.com/easy/test-information)

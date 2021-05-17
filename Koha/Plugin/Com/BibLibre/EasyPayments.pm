@@ -16,14 +16,14 @@ use JSON           ();
 use UUID;
 
 ## Here we set our plugin version
-our $VERSION = '00.00.03';
+our $VERSION = '00.00.04';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
     name            => 'Easy Payments Plugin',
     author          => 'Matthias Meusburger',
     date_authored   => '2019-07-01',
-    date_updated    => '2021-03-26',
+    date_updated    => '2021-05-17',
     minimum_version => '19.05.00.000',
     maximum_version => undef,
     version         => $VERSION,
@@ -58,7 +58,7 @@ sub opac_online_payment {
 
     my $callback_url =
       URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') );
+        C4::Context->preference('OPACBaseURL') . '/' );
     my $ua       = LWP::UserAgent->new;
     my $response = $ua->post(
         $callback_url->as_string,
@@ -119,17 +119,17 @@ sub opac_online_payment_begin {
     my $accepturl = URI->new_abs(
         'cgi-bin/koha/opac-account-pay-return.pl?payment_method='
           . $self->{class},
-        C4::Context->preference('OPACBaseURL')
+        C4::Context->preference('OPACBaseURL') . '/'
     );
 
     # Construct callback URI
     my $callback_url =
       URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') );
+        C4::Context->preference('OPACBaseURL') . '/' );
 
     my $terms_url =
       URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
-        C4::Context->preference('OPACBaseURL') );
+        C4::Context->preference('OPACBaseURL') . '/' );
 
     my $ua         = LWP::UserAgent->new;
     my $datastring = JSON::encode_json(
@@ -271,14 +271,21 @@ sub configure {
     }
     else {
         my $template = $self->get_template( { file => 'configure.tt' } );
-        my $callback_url = URI->new_abs(
-            'api/v1/contrib/' . $self->api_namespace . '/callback',
-            C4::Context->preference('staffClientBaseURL')
+        my $apis_url = URI->new_abs(
+            'api/v1/.html',
+            C4::Context->preference('staffClientBaseURL') . '/'
         );
+        my $callback = '/api/v1/contrib/' . $self->api_namespace . '/callback';
+        my $message = 'Please restart the web server.';
+        if (!$self->is_enabled) {
+            $message = 'Please enable the plugin and restart the web server.';
+        }
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            api_url => $callback_url,
+            apis_url => $apis_url,
+            callback => $callback,
+            message  => $message,
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
             currency => $self->retrieve_data('currency'),
