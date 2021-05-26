@@ -227,6 +227,7 @@ sub opac_online_payment_end {
         warn 'No payment found. Check API callback.';
         $template->param(
             borrower => scalar Koha::Patrons->find($borrowernumber),
+            reload   => $cgi->url(-relative => 1, -query =>1),
             message  => 'no_payment'
         );
         return $self->output_html( $template->output() );
