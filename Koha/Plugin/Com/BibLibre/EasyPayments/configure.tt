@@ -69,24 +69,16 @@
 [% MACRO jsinclude BLOCK %]
     <script>
         $(document).ready(function() {
+            jQuery.validator.addMethod("api", function(value, element, params) {
+                return value == 0 || !params;
+            });
             jQuery.validator.addMethod("key", function(value, element, params) {
                 return this.optional(element) || new RegExp("^" + params + "[0-9a-f]{32}$").test(value);
             }, jQuery.validator.format("Please enter the full key with the {0} prefix"));
             $("#mainform").validate({
                 rules: {
                     enable_opac_payments: {
-                        remote: {
-                            beforeSend: function(jqXHR, settings) {
-                                settings.url = "[% apis_url %]";
-                            },
-                            dataFilter: function(data, type) {
-                                if ($('#enable_opac_payments').val() == 1 && data.indexOf("POST [% callback %]") == -1) {
-                                    return false;
-                                }
-                                return true;
-                            },
-                            url: "[% apis_url %]"
-                        }
+                        api: "[% message %]"
                     },
                     currency: {
                         rangelength: [3, 3],

@@ -271,20 +271,27 @@ sub configure {
     }
     else {
         my $template = $self->get_template( { file => 'configure.tt' } );
-        my $apis_url = URI->new_abs(
-            'api/v1/.html',
-            C4::Context->preference('staffClientBaseURL') . '/'
-        );
-        my $callback = '/api/v1/contrib/' . $self->api_namespace . '/callback';
-        my $message = 'Please enable the plugin and restart the web server.';
-        if ( $self->retrieve_data( '__ENABLED__' ) ) {
-            $message = 'Please restart the web server.';
+	my $callback_url =
+	  URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
+	    C4::Context->preference('OPACBaseURL') . '/' );
+	my $ua       = LWP::UserAgent->new;
+	my $response = $ua->post(
+	    $callback_url->as_string,
+	    'Content-Type' => 'application/json',
+	    Content        => '{"event": "test.api"}'
+	);
+	my $message;
+	if ( $response->code != 200 ) {
+            if ( $self->retrieve_data( '__ENABLED__' ) ) {
+	        $message = 'Please restart the web server.';
+	    }
+	    else {
+		$message = 'Please enable the plugin and restart the web server.';
+	    }
         }
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            apis_url => $apis_url,
-            callback => $callback,
             message  => $message,
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
