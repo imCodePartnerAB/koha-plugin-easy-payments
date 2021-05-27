@@ -217,12 +217,18 @@ sub opac_online_payment_end {
     );
 
     # Check payment went through here
-    my $transaction =
-      Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
-        {
-            payment_id => scalar $cgi->param('paymentid')
-        }
-      );
+    my $transaction;
+    my $loop = 10;
+    while ($loop-- > 0){
+        $transaction =
+          Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
+            {
+                payment_id => scalar $cgi->param('paymentid')
+            }
+          );
+        last if defined $transaction->accountline_id;
+        sleep(2);
+    }
     if ( !defined $transaction->accountline_id ) {
         warn 'No payment found. Check API callback.';
         $template->param(
