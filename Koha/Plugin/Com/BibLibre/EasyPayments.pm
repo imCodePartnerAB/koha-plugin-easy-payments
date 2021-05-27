@@ -231,7 +231,7 @@ sub opac_online_payment_end {
                 payment_id => $payment_id
             }
           );
-        if ( !transaction ) {
+        if ( !$transaction ) {
             warn "No transaction for payment $payment_id";
             $message = 'no_transaction';
             last;
