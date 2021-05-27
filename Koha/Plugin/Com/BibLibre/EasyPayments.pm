@@ -56,9 +56,10 @@ sub opac_online_payment {
         return;
     }
 
-    my $callback_url =
-      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') . '/' );
+    my $callback_url = URI->new_abs(
+        'api/v1/contrib/' . $self->api_namespace . '/callback',
+        C4::Context->preference('OPACBaseURL') . '/'
+    );
     my $ua       = LWP::UserAgent->new;
     my $response = $ua->post(
         $callback_url->as_string,
@@ -117,19 +118,21 @@ sub opac_online_payment_begin {
 
     # Construct redirect URI
     my $accepturl = URI->new_abs(
-        'cgi-bin/koha/opac-account-pay-return.pl?payment_method='
-          . $self->{class},
+        'cgi-bin/koha/opac-account-pay-return.pl',
+        C4::Context->preference('OPACBaseURL') . '/'
+    );
+    $accepturl->query_form( payment_method => $self->{class} );
+
+    # Construct callback URI
+    my $callback_url = URI->new_abs(
+        'api/v1/contrib/' . $self->api_namespace . '/callback',
         C4::Context->preference('OPACBaseURL') . '/'
     );
 
-    # Construct callback URI
-    my $callback_url =
-      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') . '/' );
-
-    my $terms_url =
-      URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
-        C4::Context->preference('OPACBaseURL') . '/' );
+    my $terms_url = URI->new_abs(
+        'api/v1/contrib/' . $self->api_namespace . '/terms',
+        C4::Context->preference('OPACBaseURL') . '/'
+    );
 
     my $ua         = LWP::UserAgent->new;
     my $datastring = JSON::encode_json(
@@ -219,7 +222,7 @@ sub opac_online_payment_end {
     # Check payment went through here
     my $transaction;
     my $loop = 10;
-    while ($loop-- > 0){
+    while ( $loop-- > 0 ) {
         $transaction =
           Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
             {
@@ -233,7 +236,7 @@ sub opac_online_payment_end {
         warn 'No payment found. Check API callback.';
         $template->param(
             borrower => scalar Koha::Patrons->find($borrowernumber),
-            reload   => $cgi->url(-relative => 1, -query =>1),
+            reload   => $cgi->url( -relative => 1, -query => 1 ),
             message  => 'no_payment'
         );
         return $self->output_html( $template->output() );
@@ -278,28 +281,30 @@ sub configure {
     }
     else {
         my $template = $self->get_template( { file => 'configure.tt' } );
-	my $callback_url =
-	  URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/callback',
-	    C4::Context->preference('OPACBaseURL') . '/' );
-	my $ua       = LWP::UserAgent->new;
-	my $response = $ua->post(
-	    $callback_url->as_string,
-	    'Content-Type' => 'application/json',
-	    Content        => '{"event": "test.api"}'
-	);
-	my $message;
-	if ( $response->code != 200 ) {
-            if ( $self->retrieve_data( '__ENABLED__' ) ) {
-	        $message = 'Please restart the web server.';
-	    }
-	    else {
-		$message = 'Please enable the plugin and restart the web server.';
-	    }
+        my $callback_url = URI->new_abs(
+            'api/v1/contrib/' . $self->api_namespace . '/callback',
+            C4::Context->preference('OPACBaseURL') . '/'
+        );
+        my $ua       = LWP::UserAgent->new;
+        my $response = $ua->post(
+            $callback_url->as_string,
+            'Content-Type' => 'application/json',
+            Content        => '{"event": "test.api"}'
+        );
+        my $message;
+        if ( $response->code != 200 ) {
+            if ( $self->retrieve_data('__ENABLED__') ) {
+                $message = 'Please restart the web server.';
+            }
+            else {
+                $message =
+                  'Please enable the plugin and restart the web server.';
+            }
         }
 
         ## Grab the values we already have for our settings, if any exist
         $template->param(
-            message  => $message,
+            message => $message,
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
             currency => $self->retrieve_data('currency'),
