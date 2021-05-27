@@ -220,24 +220,40 @@ sub opac_online_payment_end {
     );
 
     # Check payment went through here
+    my $payment_id = $cgi->param('paymentid');
     my $transaction;
+    my $message;
     my $loop = 10;
     while ( $loop-- > 0 ) {
         $transaction =
           Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
             {
-                payment_id => scalar $cgi->param('paymentid')
+                payment_id => $payment_id
             }
           );
+        if ( !transaction ) {
+            warn "No transaction for payment $payment_id";
+            $message = 'no_transaction';
+            last;
+        }
+        if ( $transaction->borrowernumber != $borrowernumber ) {
+            warn
+"Borrower $borrowernumber requested payment $payment_id for borrower "
+              . $transaction->borrowernumber;
+            $message = 'another_borrower';
+            last;
+        }
         last if defined $transaction->accountline_id;
         sleep(2);
     }
     if ( !defined $transaction->accountline_id ) {
-        warn 'No payment found. Check API callback.';
+        warn "No payment found for payment $payment_id. Check API callback.";
+        $message = 'no_payment';
+    }
+    if ($message) {
         $template->param(
-            borrower => scalar Koha::Patrons->find($borrowernumber),
-            reload   => $cgi->url( -relative => 1, -query => 1 ),
-            message  => 'no_payment'
+            reload  => $cgi->url( -relative => 1, -query => 1 ),
+            message => $message
         );
         return $self->output_html( $template->output() );
     }
@@ -247,7 +263,6 @@ sub opac_online_payment_end {
         { accountlines_id => $transaction->accountline_id } );
 
     $template->param(
-        borrower      => scalar Koha::Patrons->find($borrowernumber),
         message       => 'valid_payment',
         currency      => $self->retrieve_data('currency'),
         message_value => sprintf '%.2f',
