@@ -156,7 +156,8 @@ sub opac_online_payment_begin {
             checkout => {
                 integrationType => 'hostedPaymentPage',
                 returnUrl       => $accepturl->as_string,
-                termsUrl        => $terms_url->as_string
+                termsUrl        => $terms_url->as_string,
+                merchantHandlesConsumerData => $JSON::true
             },
             notifications => {
                 webhooks => [
