@@ -290,7 +290,12 @@ sub configure {
                 live_key => scalar $cgi->param('live_key'),
                 test_key => scalar $cgi->param('test_key'),
                 testMode => scalar $cgi->param('testMode'),
-                terms    => scalar $cgi->param('terms')
+                terms    => scalar $cgi->param('terms'),
+                payment_provider => scalar $cgi->param('payment_provider'),
+                netaxept_merchantid => scalar $cgi->param('netaxept_merchantid'),
+                netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
+                netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
+                
             }
         );
         $self->go_home();
@@ -327,7 +332,11 @@ sub configure {
             live_key => $self->retrieve_data('live_key'),
             test_key => $self->retrieve_data('test_key'),
             testMode => $self->retrieve_data('testMode'),
-            terms    => $self->retrieve_data('terms')
+            terms    => $self->retrieve_data('terms'),
+            payment_provider => scalar $cgi->param('payment_provider'),
+            netaxept_merchantid => scalar $cgi->param('netaxept_merchantid'),
+            netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
+            netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
         );
 
         $self->output_html( $template->output() );

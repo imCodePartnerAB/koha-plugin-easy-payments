@@ -32,18 +32,36 @@
             <option value="0">No</option>
             <option value="1"[% IF enable_opac_payments %] selected="selected"[% END %]>Yes</option>
         </select>
+        <select id="payment_provider" name="payment_provider">
+            <option value=""></option>
+            <option value="easy"[% IF payment_provider == 'easy'%] selected="selected"[% END %]>Nets Easy</option>
+            <option value="netaxept"[% IF payment_provider == 'netaxept'%] selected="selected"[% END %]>Netaxept</option>
+        </select>
         </li>
         <li>
         <label for="currency">Currency (3&nbsp;letters): </label>
         <input type="text" name="currency" value="[% currency %]" size="3" />
         </li>
         <li>
-        <label for="live_key">Live secret key (with prefix): </label>
+        <label for="live_key">Easy Live secret key (with prefix): </label>
         <input type="text" name="live_key" value="[% live_key %]" size="32" />
         </li>
         <li>
-        <label for="test_key">Test secret key (with prefix): </label>
+        <label for="test_key">Easy Test secret key (with prefix): </label>
         <input type="text" name="test_key" value="[% test_key %]" size="32" />
+        </li>
+        <li>
+        <label for="netaxept_merchantid">Netaxept MerchantId: </label>
+        <input type="text" name="netaxept_merchantid" value="[% netaxept_merchantid %]" size="32" />
+        </li>
+        <li>
+        <li>
+        <label for="netaxept_live_key">Netaxept Live secret key: </label>
+        <input type="text" name="netaxept_live_key" value="[% netaxept_live_key %]" size="32" />
+        </li>
+        <li>
+        <label for="netaxept_test_key">Netaxept Test secret key: </label>
+        <input type="text" name="netaxept_test_key" value="[% netaxept_test_key %]" size="32" />
         </li>
         <li>
         <label for="testMode">Test mode: </label>
