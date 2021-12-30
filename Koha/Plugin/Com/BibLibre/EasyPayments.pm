@@ -5,7 +5,7 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 
 use C4::Context;
-use C4::Auth;
+use C4::Auth qw( get_template_and_user );
 use Koha::Account::Lines;
 use Koha::Acquisition::Currencies;
 use Koha::Patrons;
@@ -14,6 +14,7 @@ use Koha::Plugin::Com::BibLibre::EasyPayments::Transactions;
 use LWP::UserAgent ();
 use JSON           ();
 use UUID;
+use XML::Simple;
 
 ## Here we set our plugin version
 our $VERSION = '00.00.04';
@@ -112,97 +113,168 @@ sub opac_online_payment_begin {
       )->store;
     my $transaction_id = $transaction->transaction_id;
 
-    # Decimal separators are not allowed in Easy.
-    #The last two digits of a number are considered to be the decimals.
-    $sum = int( $sum * 100 );
 
-    # Construct redirect URI
-    my $accepturl = URI->new_abs(
-        'cgi-bin/koha/opac-account-pay-return.pl',
-        C4::Context->preference('OPACBaseURL') . '/'
-    );
-    $accepturl->query_form( payment_method => $self->{class} );
+    my $payment_provider = $self->retrieve_data('payment_provider');
+    if ( $payment_provider eq 'easy' ){
 
-    # Construct callback URI
-    my $callback_url = URI->new_abs(
-        'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') . '/'
-    );
+	    # Decimal separators are not allowed in Easy.
+        #The last two digits of a number are considered to be the decimals.
+        $sum = int( $sum * 100 );
+    
+        # Construct redirect URI
+        my $accepturl = URI->new_abs(
+            'cgi-bin/koha/opac-account-pay-return.pl',
+            C4::Context->preference('OPACBaseURL') . '/'
+        );
+        $accepturl->query_form( payment_method => $self->{class} );
+    
+        # Construct callback URI
+        my $callback_url = URI->new_abs(
+            'api/v1/contrib/' . $self->api_namespace . '/callback',
+            C4::Context->preference('OPACBaseURL') . '/'
+        );
+    
+        my $terms_url = URI->new_abs(
+            'api/v1/contrib/' . $self->api_namespace . '/terms',
+            C4::Context->preference('OPACBaseURL') . '/'
+        );
+    
+        my $ua         = LWP::UserAgent->new;
+        my $datastring = JSON::encode_json(
+            {
+                order => {
+                    items => [
+                        {
+                            name             => 'Fee',
+                            quantity         => 1,
+                            unit             => 'x',
+                            unitPrice        => $sum,
+                            grossTotalAmount => $sum,
+                            netTotalAmount   => $sum,
+                            reference        => 'fee'
+                        }
+                    ],
+                    amount    => $sum,
+                    currency  => $self->retrieve_data('currency'),
+                    reference => $transaction_id
+                },
+                checkout => {
+                    integrationType => 'hostedPaymentPage',
+                    returnUrl       => $accepturl->as_string,
+                    termsUrl        => $terms_url->as_string,
+                    merchantHandlesConsumerData => $JSON::true
+                },
+                notifications => {
+                    webhooks => [
+                        {
+                            eventName     => 'payment.checkout.completed',
+                            url           => $callback_url->as_string,
+                            authorization => $authorization
+                        }
+                    ]
+                }
+	        }
+	    );
+	    my ( $easy_server, $secret_key, $correct_key );
+	    if ( $self->retrieve_data('testMode') ) {
+	        $easy_server = 'test.api.dibspayment.eu';
+	        $correct_key = ( $secret_key = $self->retrieve_data('test_key') ) =~
+	          s/test-secret-key-//;
+	    }
+	    else {
+	        $easy_server = 'api.dibspayment.eu';
+	        $correct_key = ( $secret_key = $self->retrieve_data('live_key') ) =~
+	          s/live-secret-key-//;
+	    }
+	    if ( !$correct_key ) {
+                warn 'Secret key has the wrong prefix';
+	        $template->param( easy_message => 'Error creating payment' );
+	        $self->output_html( $template->output() );
+	    }
+	    my $easy_url =
+	      URI->new_abs( 'v1/payments', "https://$easy_server" )->as_string;
+	    my $response = $ua->post(
+	        $easy_url,
+	        Authorization  => $secret_key,
+	        'Content-Type' => 'application/json',
+	        Content        => $datastring
+	    );
+	    if ( $response->code != 201 ) {
+               warn $response->code . ': ' . $response->content;
+               $template->param( easy_message => 'Error creating payment' );
+               return $self->output_html( $template->output() );
+	    }
+	    my $json = JSON::decode_json( $response->decoded_content );
+	    $transaction->payment_id( $json->{paymentId} )->store;
+	    print $cgi->redirect( $json->{hostedPaymentPageUrl} );
+	    exit;
+    }
+    elsif ( $payment_provider eq 'netaxept' ) {
 
-    my $terms_url = URI->new_abs(
-        'api/v1/contrib/' . $self->api_namespace . '/terms',
-        C4::Context->preference('OPACBaseURL') . '/'
-    );
+    	# Decimal separators are not allowed in Netaxept.
+        #The last two digits of a number are considered to be the decimals.
+        $sum = int( $sum * 100 );
 
-    my $ua         = LWP::UserAgent->new;
-    my $datastring = JSON::encode_json(
-        {
-            order => {
-                items => [
-                    {
-                        name             => 'Fee',
-                        quantity         => 1,
-                        unit             => 'x',
-                        unitPrice        => $sum,
-                        grossTotalAmount => $sum,
-                        netTotalAmount   => $sum,
-                        reference        => 'fee'
-                    }
-                ],
-                amount    => $sum,
-                currency  => $self->retrieve_data('currency'),
-                reference => $transaction_id
-            },
-            checkout => {
-                integrationType => 'hostedPaymentPage',
-                returnUrl       => $accepturl->as_string,
-                termsUrl        => $terms_url->as_string,
-                merchantHandlesConsumerData => $JSON::true
-            },
-            notifications => {
-                webhooks => [
-                    {
-                        eventName     => 'payment.checkout.completed',
-                        url           => $callback_url->as_string,
-                        authorization => $authorization
-                    }
-                ]
-            }
+        # Construct redirect URI
+        my $accepturl = URI->new_abs(
+            'cgi-bin/koha/opac-account-pay-return.pl',
+            C4::Context->preference('OPACBaseURL')
+        );
+        $accepturl->query_form( authorization => $authorization,
+                                payment_method => $self->{class}, );
+
+        my $terms_url =
+          URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
+            C4::Context->preference('OPACBaseURL') );
+
+        # Set servers and keys
+        my ( $server, $secret_key );
+        if ( $self->retrieve_data('testMode') ) {
+            $server = 'test.epayment.nets.eu/';
+            $secret_key = $self->retrieve_data('netaxept_test_key');
         }
-    );
-    my ( $easy_server, $secret_key, $correct_key );
-    if ( $self->retrieve_data('testMode') ) {
-        $easy_server = 'test.api.dibspayment.eu';
-        $correct_key = ( $secret_key = $self->retrieve_data('test_key') ) =~
-          s/test-secret-key-//;
+        else {
+            $server = 'epayment.nets.eu/';
+            $secret_key =  $self->retrieve_data('netaxept_live_key');
+        }
+        if ( !$secret_key ) {
+            warn 'No secret key';
+            $template->param( easy_message => 'Error creating payment' );
+            $self->output_html( $template->output() );
+        }
+        my $register_url =
+          URI->new_abs( 'Netaxept/Register.aspx', "https://$server" );
+        my $ua = LWP::UserAgent->new;
+        my $netaxept_merchantid = $self->retrieve_data('netaxept_merchantid');
+        my %register_params = (
+            merchantId => $netaxept_merchantid,
+            token => $secret_key,
+            serviceType => 'B',
+            orderNumber => $transaction_id,
+            currencyCode => $self->retrieve_data('currency'),
+            amount => $sum,
+            redirectUrl => $accepturl->as_string,
+        );
+        $register_url->query_form(%register_params);
+        my $response = $ua->post($register_url);
+
+        if ( $response->code != 200 ) {
+            warn $response->code . ': ' . $response->content;
+            $template->param( easy_message => 'Error creating payment' );
+            return $self->output_html( $template->output() );
+        }
+        my $register_content = eval { XMLin($response->content) };
+
+        $transaction->payment_id( $register_content->{'TransactionId'} )->store;
+
+        my $terminal_url =
+          URI->new_abs( 'Terminal/default.aspx', "https://$server" );
+        $terminal_url->query_form( merchantId => $netaxept_merchantid,
+                                   transactionId => $register_content->{'TransactionId'},
+                                   );
+        print $cgi->redirect( $terminal_url->as_string );
+        exit;
     }
-    else {
-        $easy_server = 'api.dibspayment.eu';
-        $correct_key = ( $secret_key = $self->retrieve_data('live_key') ) =~
-          s/live-secret-key-//;
-    }
-    if ( !$correct_key ) {
-        warn 'Secret key has the wrong prefix';
-        $template->param( easy_message => 'Error creating payment' );
-        $self->output_html( $template->output() );
-    }
-    my $easy_url =
-      URI->new_abs( 'v1/payments', "https://$easy_server" )->as_string;
-    my $response = $ua->post(
-        $easy_url,
-        Authorization  => $secret_key,
-        'Content-Type' => 'application/json',
-        Content        => $datastring
-    );
-    if ( $response->code != 201 ) {
-        warn $response->code . ': ' . $response->content;
-        $template->param( easy_message => 'Error creating payment' );
-        return $self->output_html( $template->output() );
-    }
-    my $json = JSON::decode_json( $response->decoded_content );
-    $transaction->payment_id( $json->{paymentId} )->store;
-    print $cgi->redirect( $json->{hostedPaymentPageUrl} );
-    exit;
 }
 
 ## Complete the payment process
@@ -219,56 +291,233 @@ sub opac_online_payment_end {
             is_plugin       => 1,
         }
     );
+    my $payment_provider = $self->retrieve_data('payment_provider');
+    if ( $payment_provider eq 'easy' ){
+	    # Check payment went through here
+	    my $transaction =
+	      Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
+	        {
+	            payment_id => scalar $cgi->param('paymentid')
+	        }
+	      );
+	    if ( !defined $transaction->accountline_id ) {
+                warn 'No payment found. Check API callback.';
+                $template->param(
+	            borrower => scalar Koha::Patrons->find($borrowernumber),
+	            message  => 'no_payment'
+	        );
+	        return $self->output_html( $template->output() );
+	    }
 
-    # Check payment went through here
-    my $payment_id = $cgi->param('paymentid');
-    my $transaction;
-    my $message;
-    my $loop = 10;
-    while ( $loop-- > 0 ) {
-        $transaction =
-          Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
-            {
-                payment_id => $payment_id
+	    my $line =
+	      Koha::Account::Lines->find(
+	        { accountlines_id => $transaction->accountline_id } );
+
+	    $template->param(
+	        borrower      => scalar Koha::Patrons->find($borrowernumber),
+	        message       => 'valid_payment',
+	        currency      => $self->retrieve_data('currency'),
+	        message_value => sprintf '%.2f',
+	        abs( $line->amount )
+	    );
+
+        # Check payment went through here
+        my $payment_id = $cgi->param('paymentid');
+        my $transaction;
+        my $message;
+        my $loop = 10;
+        while ( $loop-- > 0 ) {
+            $transaction =
+              Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
+                {
+                    payment_id => $payment_id
+                }
+              );
+            if ( !$transaction ) {
+                warn "No transaction for payment $payment_id";
+                $message = 'no_transaction';
+                last;
             }
-          );
-        if ( !$transaction ) {
-            warn "No transaction for payment $payment_id";
-            $message = 'no_transaction';
-            last;
+            if ( $transaction->borrowernumber != $borrowernumber ) {
+                warn
+    "Borrower $borrowernumber requested payment $payment_id for borrower "
+                  . $transaction->borrowernumber;
+                $message = 'another_borrower';
+                last;
+            }
+            last if defined $transaction->accountline_id;
+            sleep(2);
         }
-        if ( $transaction->borrowernumber != $borrowernumber ) {
-            warn
-"Borrower $borrowernumber requested payment $payment_id for borrower "
-              . $transaction->borrowernumber;
-            $message = 'another_borrower';
-            last;
+        if ( !defined $transaction->accountline_id ) {
+            warn "No payment found for payment $payment_id. Check API callback.";
+            $message = 'no_payment';
         }
-        last if defined $transaction->accountline_id;
-        sleep(2);
-    }
-    if ( !defined $transaction->accountline_id ) {
-        warn "No payment found for payment $payment_id. Check API callback.";
-        $message = 'no_payment';
-    }
-    if ($message) {
-        $template->param(
-            reload  => $cgi->url( -relative => 1, -query => 1 ),
-            message => $message
-        );
+        if ($message) {
+            $template->param(
+                reload  => $cgi->url( -relative => 1, -query => 1 ),
+                message => $message
+            );
+        }
         return $self->output_html( $template->output() );
     }
+    elsif ( $payment_provider eq 'netaxept' ){
 
-    my $line =
-      Koha::Account::Lines->find(
-        { accountlines_id => $transaction->accountline_id } );
+    	# Netaxept req us to process the payment once user returns 
 
-    $template->param(
-        message       => 'valid_payment',
-        currency      => $self->retrieve_data('currency'),
-        message_value => sprintf '%.2f',
-        abs( $line->amount )
-    );
+    	my $ok = $cgi->param('responseCode');
+    	if ( $ok ne 'OK' ){
+                warn "Netaxept opac_online_payment_end: $ok";
+                # TODO: May want to use the query call to find errormessage
+    	        $template->param(
+                    borrower => scalar Koha::Patrons->find($borrowernumber),
+                    message  => $ok,
+            );
+            return $self->output_html( $template->output() );
+            exit;
+        }
+
+    	my $payment_id = $cgi->param('transactionId');
+    	if (!$payment_id){
+            warn "Netaxept opac_online_payment_end: no transactionId";
+            $template->param(
+                borrower => scalar Koha::Patrons->find($borrowernumber),
+                message  => 'no_transactionId',
+            );
+            return $self->output_html( $template->output() );
+            exit;
+    	}
+
+        my $authorization = $cgi->param('authorization');
+        if (!$authorization){
+            warn "Netaxept opac_online_payment_end: no autorization token";
+            $template->param(
+                borrower => scalar Koha::Patrons->find($borrowernumber),
+                message  => 'no_authorization',
+            );
+            return $self->output_html( $template->output() );
+            exit;
+        }
+
+
+        my $transaction =
+          Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
+            {
+                payment_id   => $payment_id,
+            }
+          );
+        if ( $authorization ne $transaction->authorization ) {
+            warn 'Netaxept opac_online_payment_end: wrong authorization token';
+            $template->param(
+                borrower => scalar Koha::Patrons->find($borrowernumber),
+                message  => 'wrong_authorization',
+            );
+            return $self->output_html( $template->output() );
+            exit;
+        }
+        # Set servers and keys
+        my ( $server, $secret_key );
+        if ( $self->retrieve_data('testMode') ) {
+            $server = 'test.epayment.nets.eu/';
+            $secret_key = $self->retrieve_data('netaxept_test_key');
+        }
+        else {
+            $server = 'epayment.nets.eu/';
+            $secret_key =  $self->retrieve_data('netaxept_live_key');
+        }
+        if ( !$secret_key ) {
+            warn 'No secret key';
+            $template->param( easy_message => 'Error creating payment' );
+            $self->output_html( $template->output() );
+            exit;
+        }
+        # Process payment
+        my $ua = LWP::UserAgent->new;
+
+        my %process_params = (
+            merchantId => $self->retrieve_data('netaxept_merchantid'),
+            token      => $secret_key,
+            operation  => 'SALE',
+            transactionId => $payment_id,
+            transactionAmount => int( $transaction->amount * 100 ),
+            );
+        my $process_url =
+          URI->new_abs( 'Netaxept/Process.aspx', "https://$server" );
+        $process_url->query_form(%process_params);
+        my $response = $ua->post($process_url);
+
+        if ( $response->code != 200 ) {
+            warn 'Netaxept, process payment: ' . $response->code . ': ' . $response->content;
+            $template->param( easy_message => 'Error finishing payment' );
+            return $self->output_html( $template->output() );
+            exit;
+        }
+        my $process = eval { XMLin($response->content) };
+        if ($process->{ResponseCode} ne 'OK' ){
+            warn 'Netaxept, process payment ResponseCode error: ' . $process->{Error}->{Result}->{ResponseCode} . ':' .  $process->{Error}->{Result}->{ResponseText};
+            $template->param( easy_message => 'Error finishing payment' );
+            return $self->output_html( $template->output() );
+            exit;
+        }
+
+        # Set accountlines as paid
+	    my @accountline_ids = split( ' ', $transaction->accountlines_ids );
+	    my $borrower        = Koha::Patrons->find($borrowernumber);
+	    my $lines           = Koha::Account::Lines->search(
+	        { accountlines_id => { 'in' => \@accountline_ids } } )->as_list;
+	    my $account = Koha::Account->new( { patron_id => $borrowernumber } );
+	    my $accountline_id = $account->pay(
+	        {
+	            amount     => $transaction->amount,
+	            note       => "Netaxept Payment $payment_id",
+	            library_id => $borrower->branchcode,
+	            lines => $lines,    # Arrayref of Koha::Account::Line objects to pay
+	        }
+	    );
+
+	    if ( ref $accountline_id eq 'HASH' ) {
+	        $accountline_id = $accountline_id->{payment_id};
+	    }
+
+	    # Link payment to dibs_transactions
+	    $transaction->update( { accountline_id => $accountline_id } );
+
+	    # Renew any items as required
+	    for my $line ( @{$lines} ) {
+	        if ( !$line->itemnumber ) {
+	            next;
+	        }
+
+	        # Skip if renewal not required
+	        if ( $line->status ne 'UNRETURNED' ) {
+	            next;
+	        }
+
+	        if (
+	            !Koha::Checkouts->find(
+	                {
+	                    itemnumber     => $line->itemnumber,
+	                    borrowernumber => $line->borrowernumber
+	                }
+	            )
+	          )
+	        {
+	            next;
+	        }
+
+	        my ( $renew_ok, $error ) =
+	          C4::Circulation::CanBookBeRenewed( $line->borrowernumber,
+	            $line->itemnumber );
+	        if ($renew_ok) {
+	            C4::Circulation::AddRenewal( $line->borrowernumber,
+	                $line->itemnumber );
+	        }
+	    }
+        $template->param( borrower      => scalar Koha::Patrons->find($borrowernumber),
+                          message       => 'valid_payment',
+                          message_value => sprintf '%.2f', $transaction->amount,
+                          currency      => $self->retrieve_data('currency'),
+                         );
+    }
 
     $self->output_html( $template->output() );
 }
@@ -333,10 +582,10 @@ sub configure {
             test_key => $self->retrieve_data('test_key'),
             testMode => $self->retrieve_data('testMode'),
             terms    => $self->retrieve_data('terms'),
-            payment_provider => scalar $cgi->param('payment_provider'),
-            netaxept_merchantid => scalar $cgi->param('netaxept_merchantid'),
-            netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
-            netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
+            payment_provider => $self->retrieve_data('payment_provider'),
+            netaxept_merchantid => $self->retrieve_data('netaxept_merchantid'),
+            netaxept_live_key => $self->retrieve_data('netaxept_live_key'),
+            netaxept_test_key => $self->retrieve_data('netaxept_test_key'),
         );
 
         $self->output_html( $template->output() );
