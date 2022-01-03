@@ -536,12 +536,13 @@ sub configure {
                 enable_opac_payments =>
                   scalar $cgi->param('enable_opac_payments'),
                 currency => scalar $cgi->param('currency'),
-                live_key => scalar $cgi->param('live_key'),
-                test_key => scalar $cgi->param('test_key'),
+                easy_live_key => scalar $cgi->param('easy_live_key'),
+                easy_test_key => scalar $cgi->param('easy_test_key'),
                 testMode => scalar $cgi->param('testMode'),
-                terms    => scalar $cgi->param('terms'),
+                easy_terms    => scalar $cgi->param('easy_terms'),
                 payment_provider => scalar $cgi->param('payment_provider'),
-                netaxept_merchantid => scalar $cgi->param('netaxept_merchantid'),
+                netaxept_live_merchantid => scalar $cgi->param('netaxept_live_merchantid'),
+                netaxept_test_merchantid => scalar $cgi->param('netaxept_test_merchantid'),
                 netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
                 netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
                 
@@ -578,12 +579,13 @@ sub configure {
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
             currency => $self->retrieve_data('currency'),
-            live_key => $self->retrieve_data('live_key'),
-            test_key => $self->retrieve_data('test_key'),
+            easy_live_key => $self->retrieve_data('easy_live_key'),
+            easy_test_key => $self->retrieve_data('easy_test_key'),
             testMode => $self->retrieve_data('testMode'),
-            terms    => $self->retrieve_data('terms'),
+            easy_terms    => $self->retrieve_data('easy_terms'),
             payment_provider => $self->retrieve_data('payment_provider'),
-            netaxept_merchantid => $self->retrieve_data('netaxept_merchantid'),
+            netaxept_live_merchantid => $self->retrieve_data('netaxept_live_merchantid'),
+            netaxept_test_merchantid => $self->retrieve_data('netaxept_test_merchantid'),
             netaxept_live_key => $self->retrieve_data('netaxept_live_key'),
             netaxept_test_key => $self->retrieve_data('netaxept_test_key'),
         );
@@ -629,6 +631,63 @@ sub api_namespace {
     my ($self) = @_;
 
     return 'easy';
+}
+
+sub active_config {
+    my ($self) = @_;
+    
+    my $conf;
+    
+    # General conf
+    $conf->{enable_opac_payments} = $self->retrieve_data('enable_opac_payments');
+    $conf->{payment_provider} = $self->retrieve_data('payment_provider');
+    $conf->{testMode} = $self->retrieve_data('testMode');
+    $conf->{currency} = $self->retrieve_data('currency');
+
+    if ( $conf->{payment_provider} eq 'easy' ) {
+        my ( $easy_server, $secret_key, $correct_key );
+        if ( $conf->{testMode} ) {
+            $easy_server = 'test.api.dibspayment.eu';
+            $correct_key = ( $secret_key = $self->retrieve_data('easy_test_key') ) =~
+              s/test-secret-key-//;
+        }
+        else {
+            $easy_server = 'api.dibspayment.eu';
+            $correct_key = ( $secret_key = $self->retrieve_data('easy_live_key') ) =~
+              s/live-secret-key-//;
+        }
+        if ( !$correct_key ) {
+            warn 'Config Easy secret key has the wrong prefix';
+            $conf->{config_ok} = 0;    
+            return;
+        }
+        else {
+            $conf->{easy_key} = $secret_key;
+            $conf->{easy_server} = $easy_server;
+        }
+        $conf->{easy_terms} = $self->retrieve_data('easy_terms');
+    }
+    if ( $conf->{payment_provider} eq 'netaxept' ) {
+        if ( $conf->{testMode} ) {
+            $conf->{netaxept_merchantid} = $self->retrieve_data('netaxept_test_merchantid');
+            $conf->{netaxept_key} = $self->retrieve_data('netaxept_test_key');
+            $conf->{netaxept_server} = 'test.epayment.nets.eu';
+        }
+        else{
+            $conf->{netaxept_merchantid} = $self->retrieve_data('netaxept_live_merchantid');
+            $conf->{netaxept_key} = $self->retrieve_data('netaxept_live_key');
+            $conf->{netaxept_server} = 'epayment.nets.eu';
+        }
+        if ( !$conf->{netaxept_merchantid} || !$conf->{netaxept_key} ) {
+            warn 'Config Netaxept merchantid or key missing';
+            $conf->{config_ok} = 0;
+            return;
+        }
+    }
+    $conf->{config_ok} = 1;
+
+    return $conf;    
+    
 }
 
 1;

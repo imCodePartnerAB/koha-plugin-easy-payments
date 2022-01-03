@@ -24,7 +24,7 @@
         <input type="hidden" name="method" value="[% METHOD %]"/>
 
         <fieldset class="rows">
-        <legend>Easy Configuration</legend>
+        <legend>General configuration</legend>
         <ol>
         <li>
         <label for="enable_opac_payments">Enable OPAC Account Payments: </label>
@@ -32,36 +32,14 @@
             <option value="0">No</option>
             <option value="1"[% IF enable_opac_payments %] selected="selected"[% END %]>Yes</option>
         </select>
+        </li>
+        <li>
+        <label for="payment_provider">Payment provider: </label>
         <select id="payment_provider" name="payment_provider">
             <option value=""></option>
             <option value="easy"[% IF payment_provider == 'easy'%] selected="selected"[% END %]>Nets Easy</option>
             <option value="netaxept"[% IF payment_provider == 'netaxept'%] selected="selected"[% END %]>Netaxept</option>
         </select>
-        </li>
-        <li>
-        <label for="currency">Currency (3&nbsp;letters): </label>
-        <input type="text" name="currency" value="[% currency %]" size="3" />
-        </li>
-        <li>
-        <label for="live_key">Easy Live secret key (with prefix): </label>
-        <input type="text" name="live_key" value="[% live_key %]" size="32" />
-        </li>
-        <li>
-        <label for="test_key">Easy Test secret key (with prefix): </label>
-        <input type="text" name="test_key" value="[% test_key %]" size="32" />
-        </li>
-        <li>
-        <label for="netaxept_merchantid">Netaxept MerchantId: </label>
-        <input type="text" name="netaxept_merchantid" value="[% netaxept_merchantid %]" size="32" />
-        </li>
-        <li>
-        <li>
-        <label for="netaxept_live_key">Netaxept Live secret key: </label>
-        <input type="text" name="netaxept_live_key" value="[% netaxept_live_key %]" size="32" />
-        </li>
-        <li>
-        <label for="netaxept_test_key">Netaxept Test secret key: </label>
-        <input type="text" name="netaxept_test_key" value="[% netaxept_test_key %]" size="32" />
         </li>
         <li>
         <label for="testMode">Test mode: </label>
@@ -71,9 +49,49 @@
         </select>
         </li>
         <li>
-        <label for="terms">Terms and conditions<br />(HTML allowed): </label>
-        <textarea name="terms" id="terms" cols="75" rows="10">[% terms | $raw %]</textarea>
+        <label for="currency">Currency (3&nbsp;letters): </label>
+        <input type="text" name="currency" value="[% currency %]" size="3" />
         </li>
+        </ol>
+        </fieldset>
+        <fieldset class="rows">
+        <legend>Nets Easy configuration</legend>
+        <ol>
+        <li>
+        <label for="easy_live_key">Easy Live secret key (with prefix): </label>
+        <input type="text" name="easy_live_key" value="[% easy_live_key %]" size="32" />
+        </li>
+        <li>
+        <label for="easy_test_key">Easy Test secret key (with prefix): </label>
+        <input type="text" name="easy_test_key" value="[% easy_test_key %]" size="32" />
+        </li>
+        <li>
+        <label for="easy_terms">Terms and conditions: </label>
+        <textarea name="easy_terms" id="terms" cols="75" rows="10">[% easy_terms | $raw %]</textarea>
+        </li>
+        </ol>
+        </fieldset>
+        <fieldset class="rows">
+        <legend>NetAxept configuration</legend>
+        <ol>
+        <li>
+        <label for="netaxept_merchantid">Netaxept Live MerchantId: </label>
+        <input type="text" name="netaxept_live_merchantid" value="[% netaxept_live_merchantid %]" size="32" />
+        </li>
+        <li>
+        <label for="netaxept_live_key">Netaxept Live secret key: </label>
+        <input type="text" name="netaxept_live_key" value="[% netaxept_live_key %]" size="32" />
+        </li>
+        <li>
+        <label for="netaxept_test_merchantid">Netaxept Test MerchantId: </label>
+        <input type="text" name="netaxept_test_merchantid" value="[% netaxept_test_merchantid %]" size="32" />
+        </li>
+        <li>
+        <label for="netaxept_test_key">Netaxept Test secret key: </label>
+        <input type="text" name="netaxept_test_key" value="[% netaxept_test_key %]" size="32" />
+        </li>
+        
+        
         </ol>
         </fieldset>
         <fieldset class="action">
