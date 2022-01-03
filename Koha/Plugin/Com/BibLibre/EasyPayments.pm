@@ -96,6 +96,8 @@ sub opac_online_payment_begin {
         }
     );
 
+    my $conf = $self->active_config;
+
     # Get the borrower
     my $borrower_result = Koha::Patrons->find($borrowernumber);
 
@@ -161,7 +163,7 @@ sub opac_online_payment_begin {
                         }
                     ],
                     amount    => $sum,
-                    currency  => $self->retrieve_data('currency'),
+                    currency  => $conf->{currency},
                     reference => $transaction_id
                 },
                 checkout => {
@@ -181,27 +183,12 @@ sub opac_online_payment_begin {
                 }
 	        }
 	    );
-	    my ( $easy_server, $secret_key, $correct_key );
-	    if ( $self->retrieve_data('testMode') ) {
-	        $easy_server = 'test.api.dibspayment.eu';
-	        $correct_key = ( $secret_key = $self->retrieve_data('test_key') ) =~
-	          s/test-secret-key-//;
-	    }
-	    else {
-	        $easy_server = 'api.dibspayment.eu';
-	        $correct_key = ( $secret_key = $self->retrieve_data('live_key') ) =~
-	          s/live-secret-key-//;
-	    }
-	    if ( !$correct_key ) {
-                warn 'Secret key has the wrong prefix';
-	        $template->param( easy_message => 'Error creating payment' );
-	        $self->output_html( $template->output() );
-	    }
+
 	    my $easy_url =
-	      URI->new_abs( 'v1/payments', "https://$easy_server" )->as_string;
+	      URI->new_abs( 'v1/payments', "https://" . $conf->{easy_server} )->as_string;
 	    my $response = $ua->post(
 	        $easy_url,
-	        Authorization  => $secret_key,
+	        Authorization  => $conf->{easy_key},
 	        'Content-Type' => 'application/json',
 	        Content        => $datastring
 	    );
@@ -233,31 +220,15 @@ sub opac_online_payment_begin {
           URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
             C4::Context->preference('OPACBaseURL') );
 
-        # Set servers and keys
-        my ( $server, $secret_key );
-        if ( $self->retrieve_data('testMode') ) {
-            $server = 'test.epayment.nets.eu/';
-            $secret_key = $self->retrieve_data('netaxept_test_key');
-        }
-        else {
-            $server = 'epayment.nets.eu/';
-            $secret_key =  $self->retrieve_data('netaxept_live_key');
-        }
-        if ( !$secret_key ) {
-            warn 'No secret key';
-            $template->param( easy_message => 'Error creating payment' );
-            $self->output_html( $template->output() );
-        }
         my $register_url =
-          URI->new_abs( 'Netaxept/Register.aspx', "https://$server" );
+          URI->new_abs( 'Netaxept/Register.aspx', "https://" . $conf->{netaxept_server} );
         my $ua = LWP::UserAgent->new;
-        my $netaxept_merchantid = $self->retrieve_data('netaxept_merchantid');
         my %register_params = (
-            merchantId => $netaxept_merchantid,
-            token => $secret_key,
+            merchantId => $conf->{netaxept_merchantid},
+            token => $conf->{netaxept_key},
             serviceType => 'B',
             orderNumber => $transaction_id,
-            currencyCode => $self->retrieve_data('currency'),
+            currencyCode => $conf->{currency},
             amount => $sum,
             redirectUrl => $accepturl->as_string,
         );
@@ -274,8 +245,8 @@ sub opac_online_payment_begin {
         $transaction->payment_id( $register_content->{'TransactionId'} )->store;
 
         my $terminal_url =
-          URI->new_abs( 'Terminal/default.aspx', "https://$server" );
-        $terminal_url->query_form( merchantId => $netaxept_merchantid,
+          URI->new_abs( 'Terminal/default.aspx', "https://" . $conf->{netaxept_server} );
+        $terminal_url->query_form( merchantId => $conf->{netaxept_merchantid},
                                    transactionId => $register_content->{'TransactionId'},
                                    );
         print $cgi->redirect( $terminal_url->as_string );
@@ -297,7 +268,10 @@ sub opac_online_payment_end {
             is_plugin       => 1,
         }
     );
-    my $payment_provider = $self->retrieve_data('payment_provider');
+
+    my $conf = $self->active_config;
+
+    my $payment_provider = $conf->{'payment_provider'};
     if ( $payment_provider eq 'easy' ){
 	    # Check payment went through here
 	    my $transaction =
@@ -322,7 +296,7 @@ sub opac_online_payment_end {
 	    $template->param(
 	        borrower      => scalar Koha::Patrons->find($borrowernumber),
 	        message       => 'valid_payment',
-	        currency      => $self->retrieve_data('currency'),
+	        currency      => $conf->{'currency'},
 	        message_value => sprintf '%.2f',
 	        abs( $line->amount )
 	    );
@@ -420,34 +394,19 @@ sub opac_online_payment_end {
             return $self->output_html( $template->output() );
             exit;
         }
-        # Set servers and keys
-        my ( $server, $secret_key );
-        if ( $self->retrieve_data('testMode') ) {
-            $server = 'test.epayment.nets.eu/';
-            $secret_key = $self->retrieve_data('netaxept_test_key');
-        }
-        else {
-            $server = 'epayment.nets.eu/';
-            $secret_key =  $self->retrieve_data('netaxept_live_key');
-        }
-        if ( !$secret_key ) {
-            warn 'No secret key';
-            $template->param( easy_message => 'Error creating payment' );
-            $self->output_html( $template->output() );
-            exit;
-        }
+
         # Process payment
         my $ua = LWP::UserAgent->new;
 
         my %process_params = (
-            merchantId => $self->retrieve_data('netaxept_merchantid'),
-            token      => $secret_key,
+            merchantId => $conf->{netaxept_merchantid},
+            token      => $conf->{netaxept_key},
             operation  => 'SALE',
             transactionId => $payment_id,
             transactionAmount => int( $transaction->amount * 100 ),
             );
         my $process_url =
-          URI->new_abs( 'Netaxept/Process.aspx', "https://$server" );
+          URI->new_abs( 'Netaxept/Process.aspx', "https://". $conf->{netaxept_server} );
         $process_url->query_form(%process_params);
         my $response = $ua->post($process_url);
 
@@ -521,7 +480,7 @@ sub opac_online_payment_end {
         $template->param( borrower      => scalar Koha::Patrons->find($borrowernumber),
                           message       => 'valid_payment',
                           message_value => sprintf '%.2f', $transaction->amount,
-                          currency      => $self->retrieve_data('currency'),
+                          currency      => $conf->{'currency'},
                          );
     }
 

@@ -46,6 +46,8 @@ sub callback {
     }
     my $paymentHandler = Koha::Plugin::Com::BibLibre::EasyPayments->new;
 
+    my $conf = $paymentHandler->active_config;
+
     my $koha_transaction_id = $body->{data}->{order}->{reference};
     if ( !$koha_transaction_id ) {
         warn 'orderid missing';
@@ -83,29 +85,13 @@ sub callback {
             orderItems => $body->{data}->{order}->{orderItems}
         }
     );
-    my ( $easy_server, $secret_key, $correct_key );
-    if ( $paymentHandler->retrieve_data('testMode') ) {
-        $easy_server = 'test.api.dibspayment.eu';
-        $correct_key =
-          ( $secret_key = $paymentHandler->retrieve_data('test_key') ) =~
-          s/test-secret-key-//;
-    }
-    else {
-        $easy_server = 'api.dibspayment.eu';
-        $correct_key =
-          ( $secret_key = $paymentHandler->retrieve_data('live_key') ) =~
-          s/live-secret-key-//;
-    }
-    if ( !$correct_key ) {
-        warn 'Secret key has the wrong prefix';
-        return $result;
-    }
+
     my $easy_url =
-      URI->new_abs( "v1/payments/$payment_id/charges", "https://$easy_server" )
+      URI->new_abs( "v1/payments/$payment_id/charges", "https://" . $conf->{easy_server} )
       ->as_string;
     my $response = $ua->post(
         $easy_url,
-        Authorization  => $secret_key,
+        Authorization  => $conf->{easy_key},
         'Content-Type' => 'application/json',
         Content        => $datastring
     );
@@ -185,7 +171,9 @@ sub terms {
             is_plugin       => 1,
         }
     );
-    $template->param( easy_message => $paymentHandler->retrieve_data('terms') );
+    my $conf = $paymentHandler->active_config;
+
+    $template->param( easy_message => $conf->('easy_terms') );
     return $c->render( status => 200, text => $template->output );
 }
 
