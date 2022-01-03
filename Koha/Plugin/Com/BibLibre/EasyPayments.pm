@@ -57,6 +57,12 @@ sub opac_online_payment {
         return;
     }
 
+    my $conf = $self->active_config;
+    unless ( $conf->{config_ok} ) {
+        warn "Easy payment plugin configuration not valid";
+        return;
+    }
+
     my $callback_url = URI->new_abs(
         'api/v1/contrib/' . $self->api_namespace . '/callback',
         C4::Context->preference('OPACBaseURL') . '/'
