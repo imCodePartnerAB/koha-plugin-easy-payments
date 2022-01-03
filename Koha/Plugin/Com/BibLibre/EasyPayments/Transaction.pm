@@ -1,6 +1,8 @@
 package Koha::Plugin::Com::BibLibre::EasyPayments::Transaction;
 
 use Modern::Perl;
+use Koha::Account::Lines;
+use Koha::Patrons;
 use Koha::Schema;
 use Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema;
 
@@ -17,6 +19,76 @@ BEGIN {
 Koha::Plugin::Com::BibLibre::EasyPayments::Transaction
 
 =head1 API
+
+
+=head2 External methods
+
+=head3 pay_accountlines
+
+=cut
+
+sub pay_accountlines {
+    my $self = shift;
+
+    my @accountline_ids = split( ' ', $self->accountlines_ids );
+    my $lines           = Koha::Account::Lines->search(
+        { accountlines_id => { 'in' => \@accountline_ids } } )->as_list;
+
+    my $borrowernumber = $self->borrowernumber;
+    my $borrower        = Koha::Patrons->find($borrowernumber);
+    my $account = Koha::Account->new( { patron_id => $borrowernumber } );
+    my $accountline_id = $account->pay(
+        {
+            amount     => $self->amount,
+            note       => "Easy Payment " . $self->payment_id,
+            library_id => $borrower->branchcode,
+            lines => $lines,    # Arrayref of Koha::Account::Line objects to pay
+        }
+    );
+
+    if ( ref $accountline_id eq 'HASH' ) {
+        $accountline_id = $accountline_id->{payment_id};
+    }
+
+    # Link payment to dibs_transactions
+    $self->update( { accountline_id => $accountline_id } );
+
+    # Renew any items as required
+    for my $line ( @{$lines} ) {
+        if ( !$line->itemnumber ) {
+            next;
+        }
+
+        # Skip if renewal not required
+        if ( $line->status ne 'UNRETURNED' ) {
+            next;
+        }
+
+        if (
+            !Koha::Checkouts->find(
+                {
+                    itemnumber     => $line->itemnumber,
+                    borrowernumber => $line->borrowernumber
+                }
+            )
+          )
+        {
+            next;
+        }
+
+        my ( $renew_ok, $error ) =
+          C4::Circulation::CanBookBeRenewed( $line->borrowernumber,
+            $line->itemnumber );
+        if ($renew_ok) {
+            C4::Circulation::AddRenewal( $line->borrowernumber,
+                $line->itemnumber );
+        }
+    }
+
+    return $self;
+}
+
+
 
 =head2 Internal methods
 
