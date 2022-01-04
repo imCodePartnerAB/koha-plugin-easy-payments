@@ -44,6 +44,14 @@ sub new {
     ## and returns our actual $self
     my $self = $class->SUPER::new($args);
 
+    # Make the plugin name consistent with selected provider
+    if ($self->retrieve_data('payment_provider') eq 'easy') {
+        $self->{metadata}->{name} = 'Nets Easy';
+    }
+    elsif ($self->retrieve_data('payment_provider') eq 'netaxept') {
+        $self->{metadata}->{name} = 'Netaxept';
+    }
+
     Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema->table(
         $self->get_qualified_table_name('transactions') );
 
