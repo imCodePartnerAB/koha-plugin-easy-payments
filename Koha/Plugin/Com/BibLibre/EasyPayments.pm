@@ -425,63 +425,13 @@ sub opac_online_payment_end {
         }
 
         # Set accountlines as paid
-	    my @accountline_ids = split( ' ', $transaction->accountlines_ids );
-	    my $borrower        = Koha::Patrons->find($borrowernumber);
-	    my $lines           = Koha::Account::Lines->search(
-	        { accountlines_id => { 'in' => \@accountline_ids } } )->as_list;
-	    my $account = Koha::Account->new( { patron_id => $borrowernumber } );
-	    my $accountline_id = $account->pay(
-	        {
-	            amount     => $transaction->amount,
-	            note       => "Netaxept Payment $payment_id",
-	            library_id => $borrower->branchcode,
-	            lines => $lines,    # Arrayref of Koha::Account::Line objects to pay
-	        }
-	    );
+	    $transaction->pay_accountlines;
 
-	    if ( ref $accountline_id eq 'HASH' ) {
-	        $accountline_id = $accountline_id->{payment_id};
-	    }
-
-	    # Link payment to dibs_transactions
-	    $transaction->update( { accountline_id => $accountline_id } );
-
-	    # Renew any items as required
-	    for my $line ( @{$lines} ) {
-	        if ( !$line->itemnumber ) {
-	            next;
-	        }
-
-	        # Skip if renewal not required
-	        if ( $line->status ne 'UNRETURNED' ) {
-	            next;
-	        }
-
-	        if (
-	            !Koha::Checkouts->find(
-	                {
-	                    itemnumber     => $line->itemnumber,
-	                    borrowernumber => $line->borrowernumber
-	                }
-	            )
-	          )
-	        {
-	            next;
-	        }
-
-	        my ( $renew_ok, $error ) =
-	          C4::Circulation::CanBookBeRenewed( $line->borrowernumber,
-	            $line->itemnumber );
-	        if ($renew_ok) {
-	            C4::Circulation::AddRenewal( $line->borrowernumber,
-	                $line->itemnumber );
-	        }
-	    }
         $template->param( borrower      => scalar Koha::Patrons->find($borrowernumber),
-                          message       => 'valid_payment',
-                          message_value => sprintf '%.2f', $transaction->amount,
-                          currency      => $conf->{'currency'},
-                         );
+                      message       => 'valid_payment',
+                      message_value => sprintf '%.2f', $transaction->amount,
+                      currency      => $conf->{'currency'},
+                     );
     }
 
     $self->output_html( $template->output() );
