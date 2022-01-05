@@ -225,10 +225,6 @@ sub opac_online_payment_begin {
         $accepturl->query_form( authorization => $authorization,
                                 payment_method => $self->{class}, );
 
-        my $terms_url =
-          URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
-            C4::Context->preference('OPACBaseURL') );
-
         my $language = getlanguage eq 'sv-SE' ? 'sv_SE' : 'en_GB';
 
         my $register_url =
