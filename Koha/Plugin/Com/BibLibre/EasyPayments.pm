@@ -6,6 +6,7 @@ use base qw(Koha::Plugins::Base);
 
 use C4::Context;
 use C4::Auth qw( get_template_and_user );
+use C4::Languages qw( getlanguage );
 use Koha::Account::Lines;
 use Koha::Acquisition::Currencies;
 use Koha::Patrons;
@@ -228,6 +229,8 @@ sub opac_online_payment_begin {
           URI->new_abs( 'api/v1/contrib/' . $self->api_namespace . '/terms',
             C4::Context->preference('OPACBaseURL') );
 
+        my $language = getlanguage eq 'sv-SE' ? 'sv_SE' : 'en_GB';
+
         my $register_url =
           URI->new_abs( 'Netaxept/Register.aspx', "https://" . $conf->{netaxept_server} );
         my $ua = LWP::UserAgent->new;
@@ -239,6 +242,7 @@ sub opac_online_payment_begin {
             currencyCode => $conf->{currency},
             amount => $sum,
             redirectUrl => $accepturl->as_string,
+            language    => $language,
         );
         $register_url->query_form(%register_params);
         my $response = $ua->post($register_url);
