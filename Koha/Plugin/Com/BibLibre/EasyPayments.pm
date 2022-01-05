@@ -239,6 +239,7 @@ sub opac_online_payment_begin {
             amount => $sum,
             redirectUrl => $accepturl->as_string,
             language    => $language,
+            orderDescription => $self->order_description($transaction),
         );
         $register_url->query_form(%register_params);
         my $response = $ua->post($register_url);
@@ -611,6 +612,38 @@ sub active_config {
 
     return $conf;    
     
+}
+
+=head3 order_description
+
+$desc = $self->order_description($transaction);
+
+Returns a description of what fines are included in the transaction, suitable for sending to payment provider
+
+=cut
+
+sub order_description {
+    my $self = shift;
+    my ($transaction) = @_;
+
+    my $conf = $self->active_config;
+
+    my @accountline_ids = split( ' ', $transaction->accountlines_ids );
+    my $lines           = Koha::Account::Lines->search(
+        { accountlines_id => { 'in' => \@accountline_ids } } )->as_list;
+
+    my ( $template ) = $self->get_template(
+        {
+            file => 'order_description.tt',
+        }
+    );
+
+    $template->param(
+        LINES => $lines,
+        payment_provider => $conf->{payment_provider},
+        TRANSACTION      => $transaction,
+    );
+    return $template->output;
 }
 
 1;

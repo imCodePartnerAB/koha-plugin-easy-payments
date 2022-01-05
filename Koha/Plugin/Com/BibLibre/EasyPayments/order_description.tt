@@ -1,0 +1,8 @@
+[% IF payment_provider == 'netaxept' %]
+    <ul>
+        [% FOREACH line IN LINES %]
+            <li>[% line.description %]: [% line.amountoutstanding FILTER format('%.2f') %]</li>
+        [% END # FOREACH %]
+            <li>Totalt: [% TRANSACTION.amount %]</li>
+    <ul>
+[% END # IF payment_provider %]

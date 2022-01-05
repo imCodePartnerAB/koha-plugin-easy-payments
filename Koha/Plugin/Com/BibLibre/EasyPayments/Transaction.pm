@@ -4,6 +4,7 @@ use Modern::Perl;
 use Koha::Account::Lines;
 use Koha::Patrons;
 use Koha::Schema;
+use Koha::Plugin::Com::BibLibre::EasyPayments;
 use Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema;
 
 use base qw(Koha::Object);
@@ -87,7 +88,6 @@ sub pay_accountlines {
 
     return $self;
 }
-
 
 
 =head2 Internal methods
