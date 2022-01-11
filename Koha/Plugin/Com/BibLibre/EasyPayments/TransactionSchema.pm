@@ -67,6 +67,11 @@ __PACKAGE__->table("koha_plugin_com_biblibre_easypayments_transactions");
   default_value: current_timestamp
   is_nullable: 0
 
+=head2 provider_error
+
+  data_type: 'mediumtext'
+  is_nullable: 1
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -91,6 +96,8 @@ __PACKAGE__->add_columns(
         default_value             => \"current_timestamp",
         is_nullable               => 0,
     },
+    "provider_error",
+    { data_type => "mediumtext", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY

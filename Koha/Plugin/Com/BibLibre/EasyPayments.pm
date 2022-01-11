@@ -16,6 +16,7 @@ use LWP::UserAgent ();
 use JSON           ();
 use UUID;
 use XML::Simple;
+use Data::Dumper::Concise;
 
 ## Here we set our plugin version
 our $VERSION = '00.00.04';
@@ -251,6 +252,13 @@ sub opac_online_payment_begin {
         }
         my $register_content = eval { XMLin($response->content) };
 
+        if ( !$register_content->{'TransactionId'} ) {
+            $transaction->update({ provider_error => Dumper($register_content->{Error}) });
+            warn $response->code . ': ' . $response->content;
+            $template->param( easy_message => 'Error creating payment' );
+            return $self->output_html( $template->output() );
+        }
+
         $transaction->payment_id( $register_content->{'TransactionId'} )->store;
 
         my $terminal_url =
@@ -351,22 +359,10 @@ sub opac_online_payment_end {
     }
     elsif ( $payment_provider eq 'netaxept' ){
 
-    	# Netaxept req us to process the payment once user returns 
+        # Netaxept req us to process the payment once user returns 
 
-    	my $ok = $cgi->param('responseCode');
-    	if ( $ok ne 'OK' ){
-                warn "Netaxept opac_online_payment_end: $ok";
-                # TODO: May want to use the query call to find errormessage
-    	        $template->param(
-                    borrower => scalar Koha::Patrons->find($borrowernumber),
-                    message  => $ok,
-            );
-            return $self->output_html( $template->output() );
-            exit;
-        }
-
-    	my $payment_id = $cgi->param('transactionId');
-    	if (!$payment_id){
+        my $payment_id = $cgi->param('transactionId');
+        if (!$payment_id){
             warn "Netaxept opac_online_payment_end: no transactionId";
             $template->param(
                 borrower => scalar Koha::Patrons->find($borrowernumber),
@@ -374,7 +370,7 @@ sub opac_online_payment_end {
             );
             return $self->output_html( $template->output() );
             exit;
-    	}
+        }
 
         my $authorization = $cgi->param('authorization');
         if (!$authorization){
@@ -403,6 +399,36 @@ sub opac_online_payment_end {
             return $self->output_html( $template->output() );
             exit;
         }
+        $template->param( transaction_id => $transaction->transaction_id, );
+
+        my $ok = $cgi->param('responseCode');
+        if ( $ok ne 'OK' ){
+                warn "Netaxept opac_online_payment_end: $ok";
+                # TODO: May want to use the query call to find errormessage
+                my $ua = LWP::UserAgent->new;
+
+                my %query_params = (
+                            merchantId => $conf->{netaxept_merchantid},
+                            token      => $conf->{netaxept_key},
+                            transactionId => $payment_id,
+                            );
+                my $query_url =
+                    URI->new_abs( 'Netaxept/Query.aspx', "https://". $conf->{netaxept_server} );
+                $query_url->query_form(%query_params);
+                my $response = $ua->post($query_url);
+                my $r = eval { XMLin($response->content) };
+                $transaction->update( { provider_error => Dumper($r->{Error}) } );
+                my $error = netaxept_process_error($r->{Error});
+                $template->param(
+                    borrower => scalar Koha::Patrons->find($borrowernumber),
+                    message  => $error->{message},
+                    action   => $error->{action},
+
+                );
+                return $self->output_html( $template->output() );
+                exit;
+        }
+
 
         # Process payment
         my $ua = LWP::UserAgent->new;
@@ -421,14 +447,18 @@ sub opac_online_payment_end {
 
         if ( $response->code != 200 ) {
             warn 'Netaxept, process payment: ' . $response->code . ': ' . $response->content;
-            $template->param( easy_message => 'Error finishing payment' );
+            $template->param( message => 'Error finishing payment' );
             return $self->output_html( $template->output() );
             exit;
         }
         my $process = eval { XMLin($response->content) };
         if ($process->{ResponseCode} ne 'OK' ){
             warn 'Netaxept, process payment ResponseCode error: ' . $process->{Error}->{Result}->{ResponseCode} . ':' .  $process->{Error}->{Result}->{ResponseText};
-            $template->param( easy_message => 'Error finishing payment' );
+            $transaction->update( { provider_error => Dumper($process->{Error}) } );
+
+            my $error = netaxept_process_error($process->{Error});
+            $template->param( message => $error->{message},
+                              action  => $error->{action}, );
             return $self->output_html( $template->output() );
             exit;
         }
@@ -644,6 +674,35 @@ sub order_description {
         TRANSACTION      => $transaction,
     );
     return $template->output;
+}
+
+sub netaxept_process_error {
+    my($error) = @_;
+
+    my @canceled = ['17'];
+    my @refused_issuer = ['01','02','41','43','51','59','61','62','65','66','93'];
+    my @refused = ['03','04','05','07','08','10','14','15','19','25','30','34'
+                  ,'35','36','37','37','39','52','54','57','58','60','63','68'
+                  ,'79','80','C9','N0','P1','P9','T3','T8','1A'];
+
+    my $return;
+    if (grep {$_ eq $error->{ResponseCode}} @canceled ) {
+        $return->{message} = 'cancel';
+    }
+    elsif (grep {$_ eq $error->{ResponseCode}} @refused_issuer) {
+        $return->{message} = 'refused';
+        $return->{action} = 'contact_issuer';
+    }
+    elsif (grep {$_ eq $error->{ResponseCode}} @refused) {
+        $return->{message} = 'refused';
+        $return->{action} = 'contact_library';
+    }
+    else {
+        $return->{message} = 'payment_failed';
+        $return->{action} = 'contact_library';
+    }
+    return $return;
+
 }
 
 1;

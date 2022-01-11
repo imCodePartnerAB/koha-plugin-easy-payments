@@ -33,9 +33,24 @@
                         [% ELSIF message == 'no_payment' %]
                             <p>Payment information not received yet.</p>
                             <p>Please <a href="[% reload %]">reload</a> to check again.</p>
+                        [% ELSIF message == 'cancel' %]
+                            <p>Payment was cancelled!</p>
+                        [% ELSIF message == 'refused' %]
+                            <p>Payment was refused by issuer!<p>
+                            [% IF action == 'contact_issuer' %]
+                                <p>Contact your card issuer for further details!<p>
+                            [% ELSIF action == 'contact_library' %]
+                                <p>Contact the library for further details!<p>
+                            [% END %]
+                        [% ELSIF message == 'payment_failed' %]
+                            <p>Unkown error.</p>
+                            <p>Please contact a librarian for details.</p>
                         [% ELSE %]
                             <p>Unkown error.</p>
                             <p>Please contact a librarian for details.</p>
+                        [% END %]
+                        [% IF transaction_id %]
+                            <p>Transaction-ID: [% transaction_id %]</p>
                         [% END %]
                     </div>
                 </div> <!-- / #useraccount -->
