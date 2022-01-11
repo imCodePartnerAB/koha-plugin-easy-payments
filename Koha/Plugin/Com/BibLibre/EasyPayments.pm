@@ -31,7 +31,8 @@ our $metadata = {
     maximum_version => undef,
     version         => $VERSION,
     description     => 'This plugin implements online payments using '
-      . 'Easy payments platform. https://tech.dibspayment.com/easy',
+      . 'Easy payments platform. https://tech.dibspayment.com/easy'
+      . ' and Netaxept platform. https://shop.nets.eu/web/partners ',
 };
 
 sub new {
