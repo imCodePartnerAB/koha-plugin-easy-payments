@@ -122,16 +122,36 @@
                             return $('#enable_opac_payments').val() == 1;
                         }
                     },
-                    live_key: {
+                    easy_live_key: {
                         key: "live-secret-key-",
                         required: function(element) {
-                            return $('#enable_opac_payments').val() == 1 && $('#testMode').val() == 0;
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'easy' && $('#testMode').val() == 0;
                         }
                     },
-                    test_key: {
+                    easy_test_key: {
                         key: "test-secret-key-",
                         required: function(element) {
-                            return $('#enable_opac_payments').val() == 1 && $('#testMode').val() == 1;
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'easy' && $('#testMode').val() == 1;
+                        }
+                    },
+                    netaxept_live_merchantid: {
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'netaxept' && $('#testMode').val() == 0;
+                        }
+                    },
+                    netaxept_test_merchantid: {
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'netaxept' && $('#testMode').val() == 1;
+                        }
+                    },
+                    netaxept_live_key: {
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'netaxept' && $('#testMode').val() == 0;
+                        }
+                    },
+                    netaxept_test_key: {
+                        required: function(element) {
+                            return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'netaxept' && $('#testMode').val() == 1;
                         }
                     }
                 },
