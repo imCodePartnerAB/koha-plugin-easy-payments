@@ -475,7 +475,7 @@ sub opac_online_payment_end {
 
         $template->param( borrower      => scalar Koha::Patrons->find($borrowernumber),
                       message       => 'valid_payment',
-                      message_value => sprintf '%.2f', $transaction->amount,
+                      message_value => sprintf('%.2f', $transaction->amount),
                       currency      => $conf->{'currency'},
                      );
     }
