@@ -1,3 +1,8 @@
+[% TRY %]
+    [% PROCESS "$PLUGIN_DIR/i18n/${LANG}.inc" %]
+[% CATCH %]
+    [% PROCESS "$PLUGIN_DIR/i18n/default.inc" %]
+[% END %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>[% IF ( LibraryNameTitle ) %][% LibraryNameTitle | html %][% ELSE %]Koha online[% END %] catalog &rsaquo; Your charges</title>
 [% INCLUDE 'doc-head-close.inc' %]
@@ -26,31 +31,31 @@
                 <div id="useraccount" class="maincontent">
                     <div class="alert alert-info">
                         [% IF message == 'valid_payment' %]
-                            <p>Your payment of [% currency %] [% message_value %] has been processed sucessfully!</p>
+                            <p>[% T.your_payment_of %] [% currency %] [% message_value %] [% T.has_been_processed %]</p>
                         [% ELSIF message == 'no_amount' %]
-                            <p>No amount was passed in!</p>
-                            <p>Please contact a librarian for details.</p>
+                            <p>[% T.no_amount_was_passed_in %]</p>
+                            <p>[% T.contact_library %]</p>
                         [% ELSIF message == 'no_payment' %]
                             <p>Payment information not received yet.</p>
                             <p>Please <a href="[% reload %]">reload</a> to check again.</p>
                         [% ELSIF message == 'cancel' %]
-                            <p>Payment was cancelled!</p>
+                            <p>[% T.payment_cancelled %]</p>
                         [% ELSIF message == 'refused' %]
-                            <p>Payment was refused by issuer!<p>
+                            <p>[% T.payment_refused %]<p>
                             [% IF action == 'contact_issuer' %]
-                                <p>Contact your card issuer for further details!<p>
+                                <p>[% T.contact_issuer %]<p>
                             [% ELSIF action == 'contact_library' %]
-                                <p>Contact the library for further details!<p>
+                                <p>[% T.contact_library %]<p>
                             [% END %]
                         [% ELSIF message == 'payment_failed' %]
-                            <p>Unkown error.</p>
-                            <p>Please contact a librarian for details.</p>
+                            <p>[% T.unknown_error %]</p>
+                            <p>[% T.contact_library %]</p>
                         [% ELSE %]
-                            <p>Unkown error.</p>
-                            <p>Please contact a librarian for details.</p>
+                            <p>[% T.unknown_error %]</p>
+                            <p>[% T.contact_library %]</p>
                         [% END %]
                         [% IF transaction_id %]
-                            <p>Transaction-ID: [% transaction_id %]</p>
+                            <p>[% T.transaction_id %]: [% transaction_id %]</p>
                         [% END %]
                     </div>
                 </div> <!-- / #useraccount -->

@@ -286,7 +286,13 @@ sub opac_online_payment_end {
             is_plugin       => 1,
         }
     );
-
+    $template->param(
+        CLASS       => $self->{'class'},
+        METHOD      => scalar $self->{'cgi'}->param('method'),
+        PLUGIN_PATH => $self->get_plugin_http_path(),
+        PLUGIN_DIR  => $self->bundle_path(),
+        LANG        => C4::Languages::getlanguage($self->{'cgi'}),
+    );
     my $conf = $self->active_config;
 
     my $payment_provider = $conf->{'payment_provider'};
