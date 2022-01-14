@@ -686,11 +686,16 @@ sub order_description {
 sub netaxept_process_error {
     my($error) = @_;
 
-    my @canceled = ['17'];
-    my @refused_issuer = ['01','02','41','43','51','59','61','62','65','66','93'];
-    my @refused = ['03','04','05','07','08','10','14','15','19','25','30','34'
+    # ResponseCode may be under Result for some calls
+    if ( !(exists $error->{ResponseCode}) && exists $error->{Result} ) {
+        $error = $error->{Result};
+    }
+
+    my @canceled = ('17');
+    my @refused_issuer = ('01','02','41','43','51','59','61','62','65','66','93');
+    my @refused = ('03','04','05','07','08','10','14','15','19','25','30','34'
                   ,'35','36','37','37','39','52','54','57','58','60','63','68'
-                  ,'79','80','C9','N0','P1','P9','T3','T8','1A'];
+                  ,'79','80','C9','N0','P1','P9','T3','T8','1A');
 
     my $return;
     if (grep {$_ eq $error->{ResponseCode}} @canceled ) {
