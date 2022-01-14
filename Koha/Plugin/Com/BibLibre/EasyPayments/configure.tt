@@ -90,8 +90,13 @@
         <label for="netaxept_test_key">Netaxept Test secret key: </label>
         <input type="text" name="netaxept_test_key" value="[% netaxept_test_key %]" size="32" />
         </li>
-        
-        
+        <li>
+        <label for="netaxept_single_page_terminal">Enable single page terminal: </label>
+        <select id="netaxept_single_page_terminal" name="netaxept_single_page_terminal">
+            <option value="0">No</option>
+            <option value="1"[% IF netaxept_single_page_terminal %] selected="selected"[% END %]>Yes</option>
+        </select>
+        </li>
         </ol>
         </fieldset>
         <fieldset class="action">

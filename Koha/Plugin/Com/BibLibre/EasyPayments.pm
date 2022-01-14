@@ -242,6 +242,7 @@ sub opac_online_payment_begin {
             redirectUrl => $accepturl->as_string,
             language    => $language,
             orderDescription => $self->order_description($transaction),
+            terminalSinglePage => $conf->{netaxept_single_page_terminal} ? 'true' : 'false',
         );
         $register_url->query_form(%register_params);
         my $response = $ua->post($register_url);
@@ -506,7 +507,7 @@ sub configure {
                 netaxept_test_merchantid => scalar $cgi->param('netaxept_test_merchantid'),
                 netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
                 netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
-                
+                netaxept_single_page_terminal => scalar $cgi->param('netaxept_single_page_terminal'),
             }
         );
         $self->go_home();
@@ -549,6 +550,7 @@ sub configure {
             netaxept_test_merchantid => $self->retrieve_data('netaxept_test_merchantid'),
             netaxept_live_key => $self->retrieve_data('netaxept_live_key'),
             netaxept_test_key => $self->retrieve_data('netaxept_test_key'),
+            netaxept_single_page_terminal => $self->retrieve_data('netaxept_single_page_terminal'),
         );
 
         $self->output_html( $template->output() );
@@ -644,6 +646,7 @@ sub active_config {
             $conf->{config_ok} = 0;
             return;
         }
+        $conf->{netaxept_single_page_terminal} = $self->retrieve_data('netaxept_single_page_terminal');
     }
     $conf->{config_ok} = 1;
 
