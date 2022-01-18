@@ -74,19 +74,21 @@ sub opac_online_payment {
         return;
     }
 
-    my $callback_url = URI->new_abs(
-        'api/v1/contrib/' . $self->api_namespace . '/callback',
-        C4::Context->preference('OPACBaseURL') . '/'
-    );
-    my $ua       = LWP::UserAgent->new;
-    my $response = $ua->post(
-        $callback_url->as_string,
-        'Content-Type' => 'application/json',
-        Content        => '{"event": "test.api"}'
-    );
-    if ( $response->code != 200 ) {
-        warn 'Easy Payment API not enabled. Please restart web server.';
-        return;
+    if ( $conf->{payment_provider} eq 'easy' ) {
+        my $callback_url = URI->new_abs(
+            'api/v1/contrib/' . $self->api_namespace . '/callback',
+            C4::Context->preference('OPACBaseURL') . '/'
+        );
+        my $ua       = LWP::UserAgent->new;
+        my $response = $ua->post(
+            $callback_url->as_string,
+            'Content-Type' => 'application/json',
+            Content        => '{"event": "test.api"}'
+        );
+        if ( $response->code != 200 ) {
+            warn 'Easy Payment API not enabled. Please restart web server.';
+            return;
+        }
     }
 
     return 1;
