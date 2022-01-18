@@ -722,5 +722,20 @@ sub netaxept_process_error {
 
 }
 
+sub finished_transactions {
+   my ($self, $param) = @_;
+
+   my $filter;
+   $filter-> {accountline_id} = { '!=', undef };
+   $filter->{updated} = { '>=', $param->{from} } if $param->{from};
+   $filter->{updated} = { '<=', $param->{to} } if $param->{to};
+
+   my $transactions =
+     Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->search(
+      $filter
+      )->as_list;
+   return $transactions;
+}
+
 1;
 
