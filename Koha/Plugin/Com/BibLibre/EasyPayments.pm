@@ -578,6 +578,7 @@ sub install() {
             `authorization` CHAR( 32 ),
             `payment_id` CHAR( 32 ),
             `updated` TIMESTAMP,
+            `provider_error` mediumtext
             PRIMARY KEY (`transaction_id`)
         ) ENGINE = INNODB;
     " );
