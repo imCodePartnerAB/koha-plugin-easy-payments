@@ -578,7 +578,8 @@ sub install() {
             `authorization` CHAR( 32 ),
             `payment_id` CHAR( 32 ),
             `updated` TIMESTAMP,
-            `provider_error` mediumtext
+            `provider_error` mediumtext,
+            `finished` datetime
             PRIMARY KEY (`transaction_id`)
         ) ENGINE = INNODB;
     " );
@@ -728,8 +729,8 @@ sub finished_transactions {
 
    my $filter;
    $filter-> {accountline_id} = { '!=', undef };
-   $filter->{updated} = { '>=', $param->{from} } if $param->{from};
-   $filter->{updated} = { '<=', $param->{to} } if $param->{to};
+   $filter->{finished} = { '>=', $param->{from} } if $param->{from};
+   $filter->{finished} = { '<=', $param->{to} } if $param->{to};
 
    my $transactions =
      Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->search(

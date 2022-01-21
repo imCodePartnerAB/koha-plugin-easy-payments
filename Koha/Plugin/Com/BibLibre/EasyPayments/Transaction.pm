@@ -51,8 +51,9 @@ sub pay_accountlines {
         $accountline_id = $accountline_id->{payment_id};
     }
 
-    # Link payment to dibs_transactions
-    $self->update( { accountline_id => $accountline_id } );
+    # Link payment to dibs_transactions and set finished timestamp
+    $self->update( { accountline_id => $accountline_id,
+                     finished =>  \'NOW()' } );
 
     # Renew any items as required
     for my $line ( @{$lines} ) {

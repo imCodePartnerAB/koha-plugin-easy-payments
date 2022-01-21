@@ -72,6 +72,11 @@ __PACKAGE__->table("koha_plugin_com_biblibre_easypayments_transactions");
   data_type: 'mediumtext'
   is_nullable: 1
 
+=head2 finished
+
+  data_type: 'datetime'
+  is_nullable: 1
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -98,6 +103,8 @@ __PACKAGE__->add_columns(
     },
     "provider_error",
     { data_type => "mediumtext", is_nullable => 1 },
+     "finished",
+    { data_type => "datetime", is_nullable => 1 },
 );
 
 =head1 PRIMARY KEY
