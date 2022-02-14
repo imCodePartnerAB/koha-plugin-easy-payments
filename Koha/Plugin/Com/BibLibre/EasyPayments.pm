@@ -48,11 +48,13 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     # Make the plugin name consistent with selected provider
-    if ($self->retrieve_data('payment_provider') eq 'easy') {
-        $self->{metadata}->{name} = 'Nets Easy';
-    }
-    elsif ($self->retrieve_data('payment_provider') eq 'netaxept') {
-        $self->{metadata}->{name} = 'Netaxept';
+    if ($self->retrieve_data('payment_provider')) {
+        if ($self->retrieve_data('payment_provider') eq 'easy') {
+            $self->{metadata}->{name} = 'Nets Easy';
+        }
+        elsif ($self->retrieve_data('payment_provider') eq 'netaxept') {
+            $self->{metadata}->{name} = 'Netaxept';
+        }
     }
 
     Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema->table(
@@ -330,7 +332,6 @@ sub opac_online_payment_end {
 
         # Check payment went through here
         my $payment_id = $cgi->param('paymentid');
-        my $transaction;
         my $message;
         my $loop = 10;
         while ( $loop-- > 0 ) {
@@ -579,7 +580,7 @@ sub install() {
             `payment_id` CHAR( 32 ),
             `updated` TIMESTAMP,
             `provider_error` mediumtext,
-            `finished` datetime
+            `finished` datetime,
             PRIMARY KEY (`transaction_id`)
         ) ENGINE = INNODB;
     " );
