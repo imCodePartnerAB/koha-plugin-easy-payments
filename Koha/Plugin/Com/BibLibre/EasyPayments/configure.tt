@@ -110,50 +110,11 @@
 [% MACRO jsinclude BLOCK %]
     <script>
         $(document).ready(function() {
-            jQuery.validator.addMethod("api", function(value, element, params) {
-                return value == 0 || !params;
-            });
             jQuery.validator.addMethod("key", function(value, element, params) {
                 return this.optional(element) || new RegExp("^" + params + "[0-9a-f]{32}$").test(value);
             }, jQuery.validator.format("Please enter the full key with the {0} prefix"));
             $("#mainform").validate({
-                messages: {
-                    enable_opac_payments: "Cannot be enabled without the plugin's API. Please restart webserver."
-                },
                 rules: {
-                    enable_opac_payments: {
-                        api: "[% message %]",
-                        remote: {
-                            depends: function(element) {
-                                return $("#payment_provider").val() == "easy" && $("#enable_opac_payments").val() == 1;
-                            },
-                            param: {
-                                beforeSend: function(jqXHR, settings) {
-                                    settings.data = '{"event": "api.test"}';
-                                },
-                                dataFilter: function(data, type) {
-                                    return true;
-                                },
-                                error: function(jqXHR, textStatus, errorThrown){
-                                    valid = false;
-                                    validator = $(this).validate();
-                                    element = $('#enable_opac_payments')[0];
-                                    method = "remote";
-                                    previous = validator.previousValue(element, method);
-                                    validator.settings.messages[ element.name ][ method ] = previous.originalMessage;
-                                    validator.invalid[ element.name ] = true;
-                                    errors = {};
-                                    message = validator.defaultMessage( element, { method: method } );
-                                    errors[ element.name ] = previous.message = message;
-                                    validator.showErrors( errors );
-                                    previous.valid = valid;
-                                    validator.stopRequest(element, valid);
-                                },
-                                type: "post",
-                                url: "[% api_url %]"
-                            }
-                        }
-                    },
                     currency: {
                         rangelength: [3, 3],
                         required: function(element) {
@@ -192,9 +153,6 @@
                             return $('#enable_opac_payments').val() == 1 && $('#payment_provider').val() == 'netaxept' && $('#testMode').val() == 1;
                         }
                     }
-                },
-                messages: {
-                    enable_opac_payments: "[% message %]"
                 }
             });
         });
