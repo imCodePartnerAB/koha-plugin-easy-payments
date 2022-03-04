@@ -708,8 +708,8 @@ sub finished_transactions {
 
    my $filter;
    $filter-> {accountline_id} = { '!=', undef };
-   $filter->{finished} = { '>=', $param->{from} } if $param->{from};
-   $filter->{finished} = { '<=', $param->{to} } if $param->{to};
+   $filter->{finished}{'>='} = $param->{from} if $param->{from};
+   $filter->{finished}{'<='} = $param->{to}   if $param->{to};
 
    my $transactions =
      Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->search(
