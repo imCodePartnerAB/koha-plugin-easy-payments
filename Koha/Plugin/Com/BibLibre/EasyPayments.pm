@@ -19,7 +19,7 @@ use XML::Simple;
 use Data::Dumper::Concise;
 
 ## Here we set our plugin version
-our $VERSION = '00.00.05';
+our $VERSION = '00.00.06';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
