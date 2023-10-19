@@ -12,7 +12,7 @@ use base qw(Koha::Object);
 BEGIN {
     Koha::Schema->register_class( TransactionSchema =>
           'Koha::Plugin::Com::BibLibre::EasyPayments::TransactionSchema' );
-    Koha::Database->schema( { new => 1 } );
+    Koha::Database->schema;
 }
 
 =head1 NAME
