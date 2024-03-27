@@ -1,5 +1,6 @@
 [% USE raw %]
 [% USE Asset %]
+[% USE AuthorisedValues %]
 [% SET footerjs = 1 %]
 [% INCLUDE 'doc-head-open.inc' %]
  <title>Koha: Easy Online Payments: Configuration</title>
@@ -51,6 +52,19 @@
         <li>
         <label for="currency">Currency (3&nbsp;letters): </label>
         <input type="text" name="currency" value="[% currency %]" size="3" />
+        </li>
+        <li>
+        <label for="payment_type">Payment type (requred if RequirePaymentType is set): </label>
+        <select id="payment_type" name="payment_type">
+            <option value=""></option>
+            [% FOREACH p_type IN  AuthorisedValues.Get('PAYMENT_TYPE') %]
+                [% IF p_type.authorised_value == payment_type %]
+                    <option value="[% p_type.authorised_value %]" selected="selected">[% p_type.lib %]</option>
+                [% ELSE %]
+                    <option value="[% p_type.authorised_value %]" >[% p_type.lib %]</option>
+                [% END %]
+            [% END %]
+        </select>
         </li>
         </ol>
         </fieldset>

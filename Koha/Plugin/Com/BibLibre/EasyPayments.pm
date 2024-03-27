@@ -475,7 +475,8 @@ sub opac_online_payment_end {
         }
 
         # Set accountlines as paid
-	    $transaction->pay_accountlines;
+        my $pay_params = { payment_type => $conf->{payment_type} };
+        $transaction->pay_accountlines( $pay_params );
 
         $template->param( borrower      => scalar Koha::Patrons->find($borrowernumber),
                       message       => 'valid_payment',
@@ -501,6 +502,7 @@ sub configure {
                 enable_opac_payments =>
                   scalar $cgi->param('enable_opac_payments'),
                 currency => scalar $cgi->param('currency'),
+                payment_type => scalar $cgi->param('payment_type'),
                 easy_live_key => scalar $cgi->param('easy_live_key'),
                 easy_test_key => scalar $cgi->param('easy_test_key'),
                 testMode => scalar $cgi->param('testMode'),
@@ -522,6 +524,7 @@ sub configure {
             enable_opac_payments =>
               $self->retrieve_data('enable_opac_payments'),
             currency => $self->retrieve_data('currency'),
+            payment_type => $self->retrieve_data('payment_type'),
             easy_live_key => $self->retrieve_data('easy_live_key'),
             easy_test_key => $self->retrieve_data('easy_test_key'),
             testMode => $self->retrieve_data('testMode'),
@@ -589,6 +592,7 @@ sub active_config {
     $conf->{payment_provider} = $self->retrieve_data('payment_provider');
     $conf->{testMode} = $self->retrieve_data('testMode');
     $conf->{currency} = $self->retrieve_data('currency');
+    $conf->{payment_type} = $self->retrieve_data('payment_type');
 
     if ( $conf->{payment_provider} eq 'easy' ) {
         my ( $easy_server, $secret_key, $correct_key );

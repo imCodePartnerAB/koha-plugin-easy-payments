@@ -29,6 +29,9 @@ Koha::Plugin::Com::BibLibre::EasyPayments::Transaction
 
 sub pay_accountlines {
     my $self = shift;
+    my $pay_params = shift;
+
+    $pay_params = $pay_params ? $pay_params : {};
 
     my @accountline_ids = split( ' ', $self->accountlines_ids );
     my $lines           = Koha::Account::Lines->search(
@@ -43,6 +46,7 @@ sub pay_accountlines {
             note       => "Easy Payment " . $self->payment_id,
             library_id => $borrower->branchcode,
             lines => $lines,    # Arrayref of Koha::Account::Line objects to pay
+            payment_type => $pay_params->{payment_type},
         }
     );
 
