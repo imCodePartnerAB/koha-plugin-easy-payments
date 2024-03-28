@@ -101,7 +101,8 @@ sub callback {
         return $result;
     }
 
-    $transaction->pay_accountlines;
+    my $pay_params = { payment_type => $conf->{payment_type} };
+    $transaction->pay_accountlines( $pay_params );
 
     return $result;
 }
