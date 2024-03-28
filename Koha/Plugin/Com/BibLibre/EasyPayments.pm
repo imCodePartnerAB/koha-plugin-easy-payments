@@ -19,14 +19,14 @@ use XML::Simple;
 use Data::Dumper::Concise;
 
 ## Here we set our plugin version
-our $VERSION = '00.00.07';
+our $VERSION = '00.00.08';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
     name            => 'Easy Payments Plugin',
-    author          => 'Matthias Meusburger',
+    author          => 'Kevin Carnes',
     date_authored   => '2019-07-01',
-    date_updated    => '2022-01-31',
+    date_updated    => '2024-03-28',
     minimum_version => '19.05.00.000',
     maximum_version => undef,
     version         => $VERSION,
