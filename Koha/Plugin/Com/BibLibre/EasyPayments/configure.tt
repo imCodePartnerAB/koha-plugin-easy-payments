@@ -83,6 +83,14 @@
         <label for="easy_terms">Terms and conditions: </label>
         <textarea name="easy_terms" id="terms" cols="75" rows="10">[% easy_terms | $raw %]</textarea>
         </li>
+        <li>
+        <label for="enable_api_selftest">Enable API selftest: </label>
+        <select id="enable_api_selftest" name="enable_api_selftest">
+            <option value="0">No</option>
+            <option value="1"[% IF enable_api_selftest %] selected="selected"[% END %]>Yes</option>
+        </select>
+        <span class="hint">Tests API connectivity on each payment page load (may cause delays)</span>
+        </li>
         </ol>
         </fieldset>
         <fieldset class="rows">

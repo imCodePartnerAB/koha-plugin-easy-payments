@@ -112,7 +112,7 @@ sub opac_online_payment {
         return;
     }
 
-    if ( $conf->{payment_provider} eq 'easy' ) {
+    if ( $conf->{payment_provider} eq 'easy' && $self->retrieve_data('enable_api_selftest') ) {
         my $callback_url = URI->new_abs(
             'api/v1/contrib/' . $self->api_namespace . '/callback',
             C4::Context->preference('OPACBaseURL') . '/'
@@ -549,6 +549,7 @@ sub configure {
                 netaxept_live_key => scalar $cgi->param('netaxept_live_key'),
                 netaxept_test_key => scalar $cgi->param('netaxept_test_key'),
                 netaxept_single_page_terminal => scalar $cgi->param('netaxept_single_page_terminal'),
+                enable_api_selftest => scalar $cgi->param('enable_api_selftest'),
             }
         );
         $self->go_home();
@@ -571,6 +572,7 @@ sub configure {
             netaxept_live_key => $self->retrieve_data('netaxept_live_key'),
             netaxept_test_key => $self->retrieve_data('netaxept_test_key'),
             netaxept_single_page_terminal => $self->retrieve_data('netaxept_single_page_terminal'),
+            enable_api_selftest => $self->retrieve_data('enable_api_selftest'),
         );
 
         $self->output_html( $template->output() );
