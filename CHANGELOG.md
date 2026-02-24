@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [00.00.08-1] - 2026-02-24
 
 ### Added
 - **Koha::Logger support** - Added structured logging with `Koha::Logger` when available, falling back to `warn` otherwise. Provides better integration with Koha's logging infrastructure.
