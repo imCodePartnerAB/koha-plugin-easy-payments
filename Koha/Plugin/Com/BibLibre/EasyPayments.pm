@@ -17,6 +17,35 @@ use JSON           ();
 use UUID;
 use XML::Simple;
 use Data::Dumper::Concise;
+use URI ();
+
+use Try::Tiny;
+my $HAVE_KOHA_LOGGER = 0;
+try {
+    require Koha::Logger;
+    Koha::Logger->import();
+    $HAVE_KOHA_LOGGER = 1;
+}
+catch {
+    $HAVE_KOHA_LOGGER = 0;
+};
+
+sub _logger {
+    return undef unless $HAVE_KOHA_LOGGER;
+    return Koha::Logger->get;
+}
+
+sub _log {
+    my ( $self, $level, $msg ) = @_;
+    my $logger = _logger();
+    if ( $logger && $logger->can($level) ) {
+        $logger->$level($msg);
+    }
+    else {
+        warn "$msg\n";
+    }
+    return;
+}
 
 ## Here we set our plugin version
 our $VERSION = '00.00.08';
@@ -72,7 +101,7 @@ sub opac_online_payment {
 
     my $conf = $self->active_config;
     unless ( $conf->{config_ok} ) {
-        warn "Easy payment plugin configuration not valid";
+        $self->_log('error', 'Easy payment plugin configuration not valid');
         return;
     }
 
@@ -88,7 +117,7 @@ sub opac_online_payment {
             Content        => '{"event": "test.api"}'
         );
         if ( $response->code != 200 ) {
-            warn 'Easy Payment API not enabled. Please restart web server.';
+            $self->_log('warn', 'Easy Payment API not enabled. Please restart web server.');
             return;
         }
     }
@@ -208,7 +237,7 @@ sub opac_online_payment_begin {
 	        Content        => $datastring
 	    );
 	    if ( $response->code != 201 ) {
-               warn $response->code . ': ' . $response->content;
+               $self->_log('error', 'Easy create payment failed: ' . $response->code . ': ' . $response->content);
                $template->param( easy_message => 'Error creating payment' );
                return $self->output_html( $template->output() );
 	    }
@@ -252,7 +281,7 @@ sub opac_online_payment_begin {
         my $response = $ua->post($register_url);
 
         if ( $response->code != 200 ) {
-            warn $response->code . ': ' . $response->content;
+            $self->_log('error', 'Netaxept register failed: ' . $response->code . ': ' . $response->content);
             $template->param( easy_message => 'Error creating payment' );
             return $self->output_html( $template->output() );
         }
@@ -260,7 +289,7 @@ sub opac_online_payment_begin {
 
         if ( !$register_content->{'TransactionId'} ) {
             $transaction->update({ provider_error => Dumper($register_content->{Error}) });
-            warn $response->code . ': ' . $response->content;
+            $self->_log('error', 'Netaxept register missing TransactionId: ' . $response->content);
             $template->param( easy_message => 'Error creating payment' );
             return $self->output_html( $template->output() );
         }
@@ -310,7 +339,7 @@ sub opac_online_payment_end {
 	        }
 	      );
 	    if ( !defined $transaction->accountline_id ) {
-                warn 'No payment found. Check API callback.';
+                $self->_log('warn', 'No payment found. Check API callback.');
                 $template->param(
 	            borrower => scalar Koha::Patrons->find($borrowernumber),
 	            message  => 'no_payment'
@@ -342,14 +371,14 @@ sub opac_online_payment_end {
                 }
               );
             if ( !$transaction ) {
-                warn "No transaction for payment $payment_id";
+                $self->_log('warn', "No transaction for payment $payment_id");
                 $message = 'no_transaction';
                 last;
             }
             if ( $transaction->borrowernumber != $borrowernumber ) {
-                warn
+                $self->_log('warn',
     "Borrower $borrowernumber requested payment $payment_id for borrower "
-                  . $transaction->borrowernumber;
+                  . $transaction->borrowernumber);
                 $message = 'another_borrower';
                 last;
             }
@@ -357,7 +386,7 @@ sub opac_online_payment_end {
             sleep(2);
         }
         if ( !defined $transaction->accountline_id ) {
-            warn "No payment found for payment $payment_id. Check API callback.";
+            $self->_log('warn', "No payment found for payment $payment_id. Check API callback.");
             $message = 'no_payment';
         }
         if ($message) {
@@ -374,7 +403,7 @@ sub opac_online_payment_end {
 
         my $payment_id = $cgi->param('transactionId');
         if (!$payment_id){
-            warn "Netaxept opac_online_payment_end: no transactionId";
+            $self->_log('warn', 'Netaxept opac_online_payment_end: no transactionId');
             $template->param(
                 borrower => scalar Koha::Patrons->find($borrowernumber),
                 message  => 'no_transactionId',
@@ -385,7 +414,7 @@ sub opac_online_payment_end {
 
         my $authorization = $cgi->param('authorization');
         if (!$authorization){
-            warn "Netaxept opac_online_payment_end: no autorization token";
+            $self->_log('warn', 'Netaxept opac_online_payment_end: no authorization token');
             $template->param(
                 borrower => scalar Koha::Patrons->find($borrowernumber),
                 message  => 'no_authorization',
@@ -402,7 +431,7 @@ sub opac_online_payment_end {
             }
           );
         if ( $authorization ne $transaction->authorization ) {
-            warn 'Netaxept opac_online_payment_end: wrong authorization token';
+            $self->_log('warn', 'Netaxept opac_online_payment_end: wrong authorization token');
             $template->param(
                 borrower => scalar Koha::Patrons->find($borrowernumber),
                 message  => 'wrong_authorization',
@@ -414,7 +443,7 @@ sub opac_online_payment_end {
 
         my $ok = $cgi->param('responseCode');
         if ( $ok ne 'OK' ){
-                warn "Netaxept opac_online_payment_end: $ok";
+                $self->_log('warn', "Netaxept opac_online_payment_end: $ok");
                 # TODO: May want to use the query call to find errormessage
                 my $ua = LWP::UserAgent->new;
 
@@ -457,14 +486,14 @@ sub opac_online_payment_end {
         my $response = $ua->post($process_url);
 
         if ( $response->code != 200 ) {
-            warn 'Netaxept, process payment: ' . $response->code . ': ' . $response->content;
+            $self->_log('error', 'Netaxept process payment failed: ' . $response->code . ': ' . $response->content);
             $template->param( message => 'Error finishing payment' );
             return $self->output_html( $template->output() );
             exit;
         }
         my $process = eval { XMLin($response->content) };
         if ($process->{ResponseCode} ne 'OK' ){
-            warn 'Netaxept, process payment ResponseCode error: ' . $process->{Error}->{Result}->{ResponseCode} . ':' .  $process->{Error}->{Result}->{ResponseText};
+            $self->_log('error', 'Netaxept process payment ResponseCode error: ' . $process->{Error}->{Result}->{ResponseCode} . ':' .  $process->{Error}->{Result}->{ResponseText});
             $transaction->update( { provider_error => Dumper($process->{Error}) } );
 
             my $error = netaxept_process_error($process->{Error});
@@ -607,7 +636,7 @@ sub active_config {
               s/live-secret-key-//;
         }
         if ( !$correct_key ) {
-            warn 'Config Easy secret key has the wrong prefix';
+            $self->_log('error', 'Config Easy secret key has the wrong prefix');
             $conf->{config_ok} = 0;    
             return;
         }
@@ -629,7 +658,7 @@ sub active_config {
             $conf->{netaxept_server} = 'epayment.nets.eu';
         }
         if ( !$conf->{netaxept_merchantid} || !$conf->{netaxept_key} ) {
-            warn 'Config Netaxept merchantid or key missing';
+            $self->_log('error', 'Config Netaxept merchantid or key missing');
             $conf->{config_ok} = 0;
             return;
         }
