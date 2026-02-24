@@ -18,6 +18,13 @@ use UUID;
 use XML::Simple;
 use Data::Dumper::Concise;
 
+sub _ua {
+    my ( $self, $timeout ) = @_;
+    $timeout //= 20;
+    my $ua = LWP::UserAgent->new( timeout => $timeout );
+    return $ua;
+}
+
 ## Here we set our plugin version
 our $VERSION = '00.00.08';
 
@@ -81,7 +88,7 @@ sub opac_online_payment {
             'api/v1/contrib/' . $self->api_namespace . '/callback',
             C4::Context->preference('OPACBaseURL') . '/'
         );
-        my $ua       = LWP::UserAgent->new;
+        my $ua       = $self->_ua();
         my $response = $ua->post(
             $callback_url->as_string,
             'Content-Type' => 'application/json',
@@ -162,7 +169,7 @@ sub opac_online_payment_begin {
             C4::Context->preference('OPACBaseURL') . '/'
         );
     
-        my $ua         = LWP::UserAgent->new;
+        my $ua         = $self->_ua();
         my $datastring = JSON::encode_json(
             {
                 order => {
@@ -235,7 +242,7 @@ sub opac_online_payment_begin {
 
         my $register_url =
           URI->new_abs( 'Netaxept/Register.aspx', "https://" . $conf->{netaxept_server} );
-        my $ua = LWP::UserAgent->new;
+        my $ua = $self->_ua();
         my %register_params = (
             merchantId => $conf->{netaxept_merchantid},
             token => $conf->{netaxept_key},
@@ -416,7 +423,7 @@ sub opac_online_payment_end {
         if ( $ok ne 'OK' ){
                 warn "Netaxept opac_online_payment_end: $ok";
                 # TODO: May want to use the query call to find errormessage
-                my $ua = LWP::UserAgent->new;
+                my $ua = $self->_ua();
 
                 my %query_params = (
                             merchantId => $conf->{netaxept_merchantid},
@@ -442,7 +449,7 @@ sub opac_online_payment_end {
 
 
         # Process payment
-        my $ua = LWP::UserAgent->new;
+        my $ua = $self->_ua();
 
         my %process_params = (
             merchantId => $conf->{netaxept_merchantid},
