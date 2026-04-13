@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [00.00.08-2] - 2026-04-13
+
+### Fixed
+- **Callback timeout** - Added 8-second timeout to LWP::UserAgent in Controller.pm callback handler. Fixes issue where Nets webhooks would fail if the charge request to Nets API was slow, causing Nets' 10-second webhook timeout to trigger.
+
 ## [00.00.08-1] - 2026-02-24
 
 ### Added

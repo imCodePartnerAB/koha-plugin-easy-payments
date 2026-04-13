@@ -74,7 +74,7 @@ sub callback {
         return $result;
     }
 
-    my $ua = LWP::UserAgent->new;
+    my $ua = LWP::UserAgent->new( timeout => 8 );
 
     # Decimal separators are not allowed in Easy.
     # The last two digits of a number are considered to be the decimals.

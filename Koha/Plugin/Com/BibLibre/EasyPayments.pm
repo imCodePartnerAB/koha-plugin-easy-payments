@@ -55,14 +55,14 @@ sub _ua {
 }
 
 ## Here we set our plugin version
-our $VERSION = '00.00.08-1';
+our $VERSION = '00.00.08-2';
 
 ## Here is our metadata, some keys are required, some are optional
 our $metadata = {
     name            => 'Easy Payments Plugin',
     author          => 'Kevin Carnes',
     date_authored   => '2019-07-01',
-    date_updated    => '2026-02-24',
+    date_updated    => '2026-04-13',
     minimum_version => '19.05.00.000',
     maximum_version => undef,
     version         => $VERSION,
