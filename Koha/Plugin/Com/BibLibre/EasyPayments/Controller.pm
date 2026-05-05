@@ -24,6 +24,7 @@ use C4::Circulation;
 use C4::Auth;
 use Koha::Account::Lines;
 use Koha::Acquisition::Currencies;
+use Koha::Logger;
 use Koha::Patrons;
 use Koha::Plugin::Com::BibLibre::EasyPayments;
 use Koha::Plugin::Com::BibLibre::EasyPayments::CGIMojo;
@@ -40,17 +41,25 @@ sub callback {
     my $c      = shift->openapi->valid_input or return;
     my $body   = $c->req->json;
     my $result = $c->render( status => 200, text => '' );
+    my $logger = Koha::Logger->get;
 
-    if ( $body->{event} ne 'payment.checkout.completed' ) {
+    my $event = $body->{event};
+    $logger->debug("Callback called with event " . $body->{event});
+    if ( $event ne 'payment.charge.created.v2' &&
+         $event ne 'payment.checkout.completed') {
         return $result;
     }
+    my $paymentMethod = $body->{data}->{paymentMethod} // '';
+    my $paymentType = $body->{data}->{paymentType} // '';
     my $paymentHandler = Koha::Plugin::Com::BibLibre::EasyPayments->new;
 
     my $conf = $paymentHandler->active_config;
 
-    my $koha_transaction_id = $body->{data}->{order}->{reference};
-    if ( !$koha_transaction_id ) {
-        warn 'orderid missing';
+    # Using payment_id instead of transaction reference, since
+    # transaction reference is not returned by payment.charge.created.v2
+    my $payment_id = $body->{data}->{paymentId};
+    if ( !$payment_id ) {
+        warn 'paymentId missing';
         return $result;
     }
 
@@ -63,11 +72,10 @@ sub callback {
     my $transaction =
       Koha::Plugin::Com::BibLibre::EasyPayments::Transactions->find(
         {
-            transaction_id => $koha_transaction_id
+            payment_id => $payment_id
         }
       );
     my $borrowernumber = $transaction->borrowernumber;
-    my $payment_id     = $transaction->payment_id;
 
     if ( $authkey ne $transaction->authorization ) {
         warn 'wrong authkey';
@@ -86,23 +94,41 @@ sub callback {
         }
     );
 
-    my $easy_url =
-      URI->new_abs( "v1/payments/$payment_id/charges", "https://" . $conf->{easy_server} )
-      ->as_string;
-    my $response = $ua->post(
-        $easy_url,
-        Authorization  => $conf->{easy_key},
-        'Content-Type' => 'application/json',
-        Content        => $datastring
-    );
+    # Swish payments are not reserved, they are directly charged,
+    # so calling the charge api route will result in an error (Cannot overcharge payment)
+    # This is not a big deal, as it does not prevent payment.
+    # However, if we wanted to have a cleaner workflow, we should either:
+    #  - add a payment_method column to koha_plugin_com_biblibre_easypayments_transactions
+    # or:
+    #  - query /v1/payments/{paymentId} to get paymentMethod
+    #    ( see https://developer.nexigroup.com/nexi-checkout/en-EU/api/payment-v1/#v1-payments-paymentid-get )
+    # so we know on payment.checkout.completed that this was a swish payment and that we don't need to call the charge api route.
+    # (payment.charge.created.v2 returns paymentMethod, payment.checkout.completed does not)
+    if ($event eq 'payment.checkout.completed') {
+        my $easy_url =
+          URI->new_abs( "v1/payments/$payment_id/charges", "https://" . $conf->{easy_server} )
+          ->as_string;
+        my $response = $ua->post(
+            $easy_url,
+            Authorization  => $conf->{easy_key},
+            'Content-Type' => 'application/json',
+            Content        => $datastring
+        );
 
-    if ( $response->code != 201 ) {
-        warn $response->code . ': ' . $response->content;
-        return $result;
+        if ( $response->code != 201 ) {
+            warn $response->code . ': ' . $response->content;
+            return $result;
+        }
     }
+    if (!$transaction->finished) {
+        my $pay_params = {
+            payment_type => $conf->{payment_type},
+            api_payment_method => $paymentMethod,
+            api_payment_type => $paymentType
+        };
 
-    my $pay_params = { payment_type => $conf->{payment_type} };
-    $transaction->pay_accountlines( $pay_params );
+        $transaction->pay_accountlines( $pay_params );
+    }
 
     return $result;
 }
