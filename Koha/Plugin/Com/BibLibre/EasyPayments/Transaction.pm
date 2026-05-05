@@ -43,7 +43,9 @@ sub pay_accountlines {
     my $accountline_id = $account->pay(
         {
             amount     => $self->amount,
-            note       => "Easy Payment " . $self->payment_id,
+            note       => "Easy Payment " . $self->payment_id . " " .
+                          $pay_params->{api_payment_method} . " " .
+                          $pay_params->{api_payment_type},
             library_id => $borrower->branchcode,
             lines => $lines,    # Arrayref of Koha::Account::Line objects to pay
             payment_type => $pay_params->{payment_type},

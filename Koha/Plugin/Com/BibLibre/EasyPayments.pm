@@ -161,7 +161,6 @@ sub opac_online_payment_begin {
             'api/v1/contrib/' . $self->api_namespace . '/terms',
             C4::Context->preference('OPACBaseURL') . '/'
         );
-    
         my $ua         = LWP::UserAgent->new;
         my $datastring = JSON::encode_json(
             {
@@ -190,7 +189,14 @@ sub opac_online_payment_begin {
                 notifications => {
                     webhooks => [
                         {
+                            # For credit cards payments
                             eventName     => 'payment.checkout.completed',
+                            url           => $callback_url->as_string,
+                            authorization => $authorization
+                        },
+                        {
+                            # For Swish payments
+                            eventName     => 'payment.charge.created.v2',
                             url           => $callback_url->as_string,
                             authorization => $authorization
                         }
