@@ -38,19 +38,22 @@ use JSON qw(encode_json);
 =cut
 
 sub callback {
-    my $c      = shift->openapi->valid_input or return;
-    my $body   = $c->req->json;
-    my $result = $c->render( status => 200, text => '' );
-    my $logger = Koha::Logger->get;
+    my $c         = shift->openapi->valid_input or return;
+    my $body      = $c->req->json;
+    my $result    = $c->render( status => 200, text => '' );
+    my $logger    = Koha::Logger->get;
+    my $logprefix = "Easy Payments Plugin: ";
 
     my $event = $body->{event};
-    $logger->debug("Callback called with event " . $body->{event});
+    $logger->debug($logprefix . "Callback called with event " . $body->{event});
     if ( $event ne 'payment.charge.created.v2' &&
          $event ne 'payment.checkout.completed') {
         return $result;
     }
     my $paymentMethod = $body->{data}->{paymentMethod} // '';
     my $paymentType = $body->{data}->{paymentType} // '';
+    $logger->debug($logprefix . "Callback called with paymentMethod: $paymentMethod, paymentType: $paymentType");
+
     my $paymentHandler = Koha::Plugin::Com::BibLibre::EasyPayments->new;
 
     my $conf = $paymentHandler->active_config;
@@ -75,6 +78,9 @@ sub callback {
             payment_id => $payment_id
         }
       );
+
+    $logger->debug($logprefix . "Callback: found transaction id: " . $transaction->transaction_id . ", amount: " . $transaction->amount );
+
     my $borrowernumber = $transaction->borrowernumber;
 
     if ( $authkey ne $transaction->authorization ) {
@@ -105,6 +111,7 @@ sub callback {
     # so we know on payment.checkout.completed that this was a swish payment and that we don't need to call the charge api route.
     # (payment.charge.created.v2 returns paymentMethod, payment.checkout.completed does not)
     if ($event eq 'payment.checkout.completed') {
+        $logger->debug($logprefix . "Callback calling v1/payments/$payment_id/charges");
         my $easy_url =
           URI->new_abs( "v1/payments/$payment_id/charges", "https://" . $conf->{easy_server} )
           ->as_string;
@@ -127,7 +134,10 @@ sub callback {
             api_payment_type => $paymentType
         };
 
+        $logger->debug($logprefix . "Callback: paying accountlines");
         $transaction->pay_accountlines( $pay_params );
+    } else {
+        $logger->debug($logprefix . "Callback: transaction already finished");
     }
 
     return $result;
